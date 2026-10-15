@@ -23,16 +23,29 @@ export function startBoard(root, { big = false } = {}) {
         <div class="b-stats" data-r="stats"></div>
       </div>
       <div class="b-off hidden" data-r="off"></div>
+      <div class="b-bar">
+      <div class="tabs b-view" data-r="view">
+        <button data-v="plates" class="on" type="button">名牌牆</button>
+        <button data-v="groups" type="button">依狀態分類</button>
+      </div>
       <div class="tabs b-filter" data-r="filter">
         <button data-c="" class="on" type="button">全部</button>
         ${Object.values(COMPANIES).map(c => `<button data-c="${esc(c)}" type="button">${esc(c)}</button>`).join("")}
       </div>
+      </div>
+      <div class="b-legend" data-r="legend">
+        <span class="lg in">上班</span><span class="lg field">外勤</span><span class="lg leave">請假</span>
+        <span class="lg none">尚未打卡</span><span class="lg late">未到</span><span class="lg off">已下班</span>
+      </div>
       <div data-r="sections"></div>
-      <p class="muted b-note">畫面會即時更新，不用重新整理。請假只顯示時段，不顯示假別。</p>
+      <p class="muted b-note"><span data-r="updated"></span>　有人打卡會即時顯示，另外每 2 分鐘自動重新讀取一次資料。請假只顯示時段，不顯示假別。</p>
     </div>`;
   const $r = k => root.querySelector(`[data-r="${k}"]`);
 
   let directory = [], holidays = new Map(), presence = {}, leaveDocs = [], filter = "";
+  let view = "plates";
+  let lastUpdated = new Date();
+  try { view = localStorage.getItem("wx_board_view") || "plates"; } catch (e) { /* 無痕模式 */ }
   let today = todayStr(), ymd = ymdOf(new Date());
   const prevStatus = {};
   const unsubs = [];
@@ -45,6 +58,15 @@ export function startBoard(root, { big = false } = {}) {
     render();
   };
 
+  const setView = v => {
+    view = v;
+    try { localStorage.setItem("wx_board_view", v); } catch (e) { /* 無痕模式 */ }
+    $r("view").querySelectorAll("button").forEach(x => x.classList.toggle("on", x.dataset.v === v));
+    $r("legend").classList.toggle("hidden", v !== "plates");
+    render();
+  };
+  $r("view").onclick = e => { const b = e.target.closest("button[data-v]"); if (b) setView(b.dataset.v); };
+
   function subscribe() {
     unsubs.splice(0).forEach(u => u());
     presence = {}; leaveDocs = [];
@@ -54,6 +76,7 @@ export function startBoard(root, { big = false } = {}) {
     unsubs.push(onSnapshot(query(collection(db, "presence"), where("ymd", "==", ymd)), s => {
       presence = {};
       s.docs.forEach(d => { const v = d.data({ serverTimestamps: "estimate" }); presence[v.empId] = v; });
+      lastUpdated = new Date();
       render();
     }, onErr));
     unsubs.push(onSnapshot(query(collection(db, "leaveBoard"), where("endDate", ">=", today)), s => {
@@ -120,6 +143,10 @@ export function startBoard(root, { big = false } = {}) {
       + stat(arrived, "已到", "s-in") + stat(groups.field.length, "外勤", "s-field")
       + (workday ? stat(groups.leave.length, "請假", "s-leave") + stat(groups.none.filter(x => x.s.overdue).length, "未到", "s-none") : "");
 
+    if (view === "plates") {
+      renderPlates(people, nowMin, workday);
+      return;
+    }
     $r("sections").innerHTML = SECTIONS.map(([key, title, icon]) => {
       const list = groups[key];
       if (!list.length && (key === "off" || !workday)) return "";
@@ -139,6 +166,47 @@ export function startBoard(root, { big = false } = {}) {
     if (!directory.length) $r("sections").innerHTML = `<div class="muted">員工名單尚未建立，請管理員先開啟一次管理後台。</div>`;
   }
 
+  // 名牌牆：所有員工固定排列（依公司、員工編號），用顏色表示狀態
+  const PLATE_LABEL = { in: "上班", field: "外勤", leave: "請假", none: "尚未打卡", off: "已下班" };
+  function renderPlates(people, nowMin, workday) {
+    const byCo = new Map();
+    for (const p of people) {
+      if (!byCo.has(p.company)) byCo.set(p.company, []);
+      byCo.get(p.company).push(p);
+    }
+    const order = Object.values(COMPANIES);
+    const cos = [...byCo.keys()].sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99));
+    $r("sections").innerHTML = cos.map(co => {
+      const list = byCo.get(co).sort((a, b) => a.empId.localeCompare(b.empId));
+      return `<div class="b-sec"><h3><span class="co-dot ${COMPANY_CLASS[co] || ""}"></span>${esc(co)} <span class="muted">${list.length} 人</span></h3>
+        <div class="plates">${list.map(p => {
+          const s = statusOf(p, nowMin, workday);
+          const cls = s.overdue ? "late" : (!workday && s.st === "none" ? "rest" : s.st);
+          const label = s.overdue ? "未到" : (!workday && s.st === "none" ? "休假日" : PLATE_LABEL[s.st]);
+          const changed = prevStatus[p.empId] && prevStatus[p.empId] !== s.st;
+          prevStatus[p.empId] = s.st;
+          const pr = presence[p.empId] || {};
+          const tIn = pr.inAt ? fmtTime(pr.inAt.toDate()) : "";
+          const tOut = pr.outAt ? fmtTime(pr.outAt.toDate()) : "";
+          const leaveTag = s.tags.find(t => t[1].startsWith("請假"));
+          let detail = "";
+          if (s.st === "in") detail = tIn + (leaveTag ? `・${leaveTag[1]}` : "");
+          else if (s.st === "field") detail = `${esc(pr.customer || "")}${tIn ? "・" + tIn : ""}`;
+          else if (s.st === "off") detail = `${tIn}–${tOut}`;
+          else if (s.st === "leave") detail = s.sub.replace(/^請假\s*/, "");
+          else if (s.sub.includes("請假")) detail = s.sub.replace(/^(未到|尚未打卡)/, "").replace(/[（）]/g, "");
+          return `<div class="plate p-${cls}${changed ? " pop" : ""}" title="${esc(p.name)}">
+            <div class="strip ${COMPANY_CLASS[co] || ""}"></div>
+            <div class="pn">${esc(p.name)}</div>
+            <div class="pid">${esc(p.empId)}</div>
+            <div class="pst">${label}${s.tags.some(t => t[1] === "遲到") ? "・遲到" : ""}</div>
+            <div class="pdt">${detail || "&nbsp;"}</div>
+          </div>`;
+        }).join("")}</div></div>`;
+    }).join("") || `<div class="muted">沒有員工</div>`;
+    if (!directory.length) $r("sections").innerHTML = `<div class="muted">員工名單尚未建立，請管理員先開啟一次管理後台。</div>`;
+  }
+
   function tick() {
     const now = new Date();
     $r("time").textContent = big ? fmtTimeSec(now) : fmtTime(now);
@@ -147,8 +215,17 @@ export function startBoard(root, { big = false } = {}) {
     if (t !== today) { today = t; ymd = ymdOf(now); subscribe(); }
   }
   tick();
+  setView(view);
   subscribe();
   const t1 = setInterval(tick, 1000);
-  const t2 = setInterval(render, 60000); // 「未到」會隨時間變化
-  return () => { unsubs.forEach(u => u()); clearInterval(t1); clearInterval(t2); };
+  // 每 2 分鐘重新讀取全部資料（網路斷線恢復、或電視長時間開著時確保畫面正確）
+  const REFRESH_MS = 2 * 60 * 1000;
+  let nextRefresh = Date.now() + REFRESH_MS;
+  const refresh = () => { subscribe(); lastUpdated = new Date(); nextRefresh = Date.now() + REFRESH_MS; };
+  const t2 = setInterval(refresh, REFRESH_MS);
+  const t3 = setInterval(() => {
+    const left = Math.max(0, Math.round((nextRefresh - Date.now()) / 1000));
+    $r("updated").textContent = `最後更新 ${fmtTimeSec(lastUpdated)}（${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} 後自動更新）`;
+  }, 1000);
+  return () => { unsubs.forEach(u => u()); clearInterval(t1); clearInterval(t2); clearInterval(t3); };
 }
