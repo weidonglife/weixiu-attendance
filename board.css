@@ -233,11 +233,14 @@
   .board { padding: 10px; border-radius: 12px; }
 }
 @container board (max-width: 600px) {
-  .board .fp, .board.big .fp { grid-template-columns: 1fr; gap: 10px; padding: 12px 12px 14px; }
-  .board .vfd { justify-self: start; }
+  .board .fp, .board.big .fp { grid-template-columns: auto 1fr; gap: 10px; padding: 12px 12px 14px; }
+  .board .fp-title, .board.big .fp-title { font-size: 15px; letter-spacing: .04em; }
+  .board .fp-date, .board.big .fp-date { font-size: 12px; }
   .board .fp-mark { height: 32px; }
-  .board .vfd, .board.big .vfd { font-size: 26px; padding: 6px 10px; }
-  .board .vfd .val, .board.big .vfd .val { left: 10px; top: 6px; }
+  .board .vfd, .board.big .vfd { font-size: 22px; padding: 6px 8px; letter-spacing: 1px; }
+  .board .fp-id { min-width: 0; gap: 8px; }
+  .board .fp-title, .board .fp-date { word-break: keep-all; }
+  .board .vfd .val, .board.big .vfd .val { left: 8px; top: 6px; }
   .board .readouts { justify-content: space-between; }
   .board .ro, .board.big .ro { flex: 1; min-width: 0; padding: 4px 8px 5px; }
   .board .seg7, .board.big .seg7 { font-size: 20px; }
@@ -247,6 +250,11 @@
   .board .plate .pn, .board.big .plate .pn { font-size: 18px; letter-spacing: .06em; }
   .board.big .fp-mark { height: 36px; }
   .board.big .fp-title { font-size: 16px; }
+}
+/* 很窄的手機：放不下時時鐘才換到下一行 */
+@container board (max-width: 280px) {
+  .board .fp, .board.big .fp { grid-template-columns: 1fr; }
+  .board .vfd { justify-self: start; }
 }
 @media (prefers-reduced-motion: reduce) {
   .board .plate.pop, .board .b-card.pop, .board .live { animation: none; }
