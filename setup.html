@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>初始設定</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top"><div class="inner"><h1>打卡系統 初始設定</h1></div></header>
+<div class="wrap">
+  <div id="vLoading" class="card"><p class="muted">檢查中…</p></div>
+
+  <div id="vDone" class="card hidden">
+    <h2>已完成初始設定</h2>
+    <p>系統已經有管理員了，這個頁面不能再使用。</p>
+    <p><a href="admin.html">前往管理後台</a>　<a href="index.html">前往打卡頁面</a></p>
+  </div>
+
+  <div id="vForm" class="card hidden">
+    <h2>建立第一位管理員</h2>
+    <p class="muted">這個頁面只能使用一次。建立完成後即自動鎖定，之後的員工帳號都從管理後台新增。</p>
+    <div class="row">
+      <div><label for="sEmpId">員工編號</label><input id="sEmpId" placeholder="例如 W001" autocapitalize="characters"></div>
+      <div><label for="sName">姓名</label><input id="sName"></div>
+    </div>
+    <label for="sCompany">公司</label>
+    <input id="sCompany" readonly placeholder="依編號開頭自動帶入">
+    <label for="sPw1">密碼（至少 8 個字元）</label>
+    <input id="sPw1" type="password" autocomplete="new-password">
+    <label for="sPw2">再輸入一次</label>
+    <input id="sPw2" type="password" autocomplete="new-password">
+    <button id="btnSetup" class="block">建立管理員</button>
+    <div id="sMsg" class="msg hidden"></div>
+  </div>
+</div>
+<script type="module" src="setup.js"></script>
+</body>
+</html>

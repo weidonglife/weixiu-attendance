@@ -1,0 +1,120 @@
+rules_version = '2';
+
+// 打卡系統 資料庫安全規則
+// 重點：打卡時間只能是伺服器時間、手機必須綁定、打卡紀錄一經寫入不可修改或刪除
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function isActive() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && me().active == true;
+    }
+    function isAdmin() { return isActive() && me().role == 'admin'; }
+
+    // 台灣時間（UTC+8）的年月、年月日，例如 202610、20261014
+    function tw() { return request.time + duration.value(8, 'h'); }
+    function ymNow() { return tw().year() * 100 + tw().month(); }
+    function ymdNow() { return ymNow() * 100 + tw().day(); }
+
+    function bootstrapPending() {
+      return !exists(/databases/$(database)/documents/settings/bootstrap)
+        && existsAfter(/databases/$(database)/documents/settings/bootstrap);
+    }
+
+    // ===== 員工編號 → 登入帳號 對照（登入前要查，所以允許讀單筆）=====
+    match /logins/{empId} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if isAdmin()
+        || (signedIn() && bootstrapPending() && request.resource.data.uid == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    // ===== 員工資料 =====
+    match /users/{uid} {
+      allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow list: if isAdmin();
+
+      allow create: if isAdmin()
+        || (signedIn() && request.auth.uid == uid && bootstrapPending()
+            && request.resource.data.role == 'admin' && request.resource.data.active == true);
+
+      // 員工本人只能：第一次綁定手機、把「需要改密碼」標記改成 false
+      allow update: if isAdmin()
+        || (signedIn() && request.auth.uid == uid && resource.data.active == true
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deviceId', 'mustChangePassword'])
+            && (request.resource.data.deviceId == resource.data.deviceId
+                || (resource.data.deviceId == null && request.resource.data.deviceId is string))
+            && (request.resource.data.mustChangePassword == resource.data.mustChangePassword
+                || request.resource.data.mustChangePassword == false));
+
+      allow delete: if false;
+    }
+
+    // ===== 打卡紀錄 =====
+    match /punches/{id} {
+      allow get, list: if isAdmin() || (isActive() && resource.data.empId == me().empId);
+
+      // 員工自己打卡
+      allow create: if isActive()
+        && request.resource.data.keys().hasAll(['uid', 'empId', 'name', 'company', 'type', 'mode', 'ts', 'ym', 'ymd',
+                                                'lat', 'lng', 'accuracy', 'distance', 'customer', 'deviceId'])
+        && request.resource.data.keys().hasOnly(['uid', 'empId', 'name', 'company', 'type', 'mode', 'ts', 'ym', 'ymd',
+                                                 'lat', 'lng', 'accuracy', 'distance', 'customer', 'deviceId'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.empId == me().empId
+        && request.resource.data.name == me().name
+        && request.resource.data.company == me().company
+        && request.resource.data.ts == request.time
+        && request.resource.data.ym == ymNow()
+        && request.resource.data.ymd == ymdNow()
+        && request.resource.data.type in ['in', 'out']
+        && request.resource.data.mode in ['office', 'field']
+        && request.resource.data.lat is number
+        && request.resource.data.lng is number
+        && me().deviceId != null
+        && request.resource.data.deviceId == me().deviceId
+        && (request.resource.data.mode == 'office'
+              ? request.resource.data.distance is number
+              : (request.resource.data.customer is string && request.resource.data.customer.size() > 0));
+
+      // 管理員核准補打卡時寫入
+      allow create: if isAdmin() && request.resource.data.mode == 'correction';
+
+      // 打卡紀錄不可修改、不可刪除（符合勞基法出勤紀錄保存要求）
+      allow update, delete: if false;
+    }
+
+    // ===== 補打卡申請 =====
+    match /corrections/{id} {
+      allow get, list: if isAdmin() || (isActive() && resource.data.empId == me().empId);
+      allow create: if isActive()
+        && request.resource.data.keys().hasOnly(['uid', 'empId', 'name', 'company', 'date', 'time', 'type', 'reason', 'status', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.empId == me().empId
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.type in ['in', 'out']
+        && request.resource.data.reason is string && request.resource.data.reason.size() > 0;
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // ===== 系統設定 =====
+    match /settings/office {
+      allow get: if isActive();
+      allow write: if isAdmin();
+    }
+    match /settings/bootstrap {
+      allow get: if true;
+      allow create: if signedIn()
+        && !exists(/databases/$(database)/documents/settings/bootstrap)
+        && request.resource.data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow update, delete: if false;
+    }
+  }
+}

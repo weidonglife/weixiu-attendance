@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>員工打卡</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="inner">
+    <h1>唯修集團 員工打卡</h1>
+    <div class="who" id="who"></div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- 載入中 -->
+  <div id="vLoading" class="card"><p class="muted">載入中…</p></div>
+
+  <!-- 登入 -->
+  <div id="vLogin" class="card hidden">
+    <h2>登入</h2>
+    <label for="loginId">員工編號</label>
+    <input id="loginId" autocomplete="username" placeholder="例如 W001" autocapitalize="characters">
+    <label for="loginPw">密碼</label>
+    <input id="loginPw" type="password" autocomplete="current-password">
+    <button id="btnLogin" class="block">登入</button>
+    <div id="loginMsg" class="msg hidden"></div>
+    <p class="muted">忘記密碼請聯絡管理員重設。</p>
+  </div>
+
+  <!-- 第一次登入：修改密碼 -->
+  <div id="vChangePw" class="card hidden">
+    <h2>請設定新密碼</h2>
+    <p class="muted">第一次登入或密碼剛被重設，請改成只有你知道的密碼（至少 8 個字元）。</p>
+    <label for="newPw1">新密碼</label>
+    <input id="newPw1" type="password" autocomplete="new-password">
+    <label for="newPw2">再輸入一次</label>
+    <input id="newPw2" type="password" autocomplete="new-password">
+    <button id="btnChangePw" class="block">確認修改</button>
+    <div id="pwMsg" class="msg hidden"></div>
+  </div>
+
+  <!-- 手機未綁定／帳號停用 -->
+  <div id="vBlocked" class="card hidden">
+    <h2 id="blockedTitle">無法使用</h2>
+    <p id="blockedText"></p>
+    <button id="btnBlockedLogout" class="secondary block">登出</button>
+  </div>
+
+  <!-- 主畫面 -->
+  <div id="vMain" class="hidden">
+    <div class="card clock">
+      <div class="time" id="clockTime">--:--:--</div>
+      <div class="date" id="clockDate"></div>
+
+      <div class="seg" role="tablist">
+        <button id="modeOffice" class="on" type="button">內勤打卡</button>
+        <button id="modeField" type="button">外勤打卡</button>
+      </div>
+      <div id="fieldBox" class="hidden" style="text-align:left">
+        <label for="customer">客戶名稱／地點（必填）</label>
+        <input id="customer" placeholder="例如：台積電 Fab 12">
+      </div>
+
+      <div class="punch-btns">
+        <button id="btnIn" class="in" type="button">上班打卡</button>
+        <button id="btnOut" class="out" type="button">下班打卡</button>
+      </div>
+      <div id="punchMsg" class="msg hidden"></div>
+      <p class="muted">打卡時間以伺服器時間為準，會同時記錄 GPS 位置。</p>
+    </div>
+
+    <div class="card">
+      <h2>今天的打卡紀錄</h2>
+      <div id="todayList" class="muted">尚無紀錄</div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="align-items:center">
+        <h2 style="margin:0">出勤紀錄</h2>
+        <input id="monthPick" type="month" style="max-width:180px">
+      </div>
+      <div class="table-scroll" style="margin-top:10px">
+        <table>
+          <thead><tr><th>日期</th><th>上班</th><th>下班</th><th>狀態</th></tr></thead>
+          <tbody id="monthBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>忘記打卡？申請補打卡</h2>
+      <div class="row">
+        <div><label for="corDate">日期</label><input id="corDate" type="date"></div>
+        <div><label for="corTime">時間</label><input id="corTime" type="time"></div>
+        <div>
+          <label for="corType">類別</label>
+          <select id="corType"><option value="in">上班</option><option value="out">下班</option></select>
+        </div>
+      </div>
+      <label for="corReason">原因（必填）</label>
+      <textarea id="corReason" placeholder="例如：手機沒電，08:00 已到公司"></textarea>
+      <button id="btnCor" class="block">送出申請</button>
+      <div id="corMsg" class="msg hidden"></div>
+
+      <h2 style="margin-top:20px">我的補打卡申請</h2>
+      <div id="corList" class="muted">尚無申請</div>
+    </div>
+
+    <button id="btnLogout" class="secondary block">登出</button>
+  </div>
+
+  <footer class="note">唯修科技 · 唯校中心 · 傳創機電</footer>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

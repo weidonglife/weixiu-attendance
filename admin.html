@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>打卡管理後台</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="inner">
+    <h1>打卡系統 管理後台</h1>
+    <div class="who" id="who"></div>
+  </div>
+</header>
+
+<div class="wrap wide">
+
+  <div id="vLoading" class="card"><p class="muted">載入中…</p></div>
+
+  <div id="vLogin" class="card hidden" style="max-width:420px;margin:0 auto">
+    <h2>管理員登入</h2>
+    <label for="loginId">員工編號</label>
+    <input id="loginId" autocomplete="username" placeholder="例如 W001" autocapitalize="characters">
+    <label for="loginPw">密碼</label>
+    <input id="loginPw" type="password" autocomplete="current-password">
+    <button id="btnLogin" class="block">登入</button>
+    <div id="loginMsg" class="msg hidden"></div>
+  </div>
+
+  <div id="vDenied" class="card hidden">
+    <h2>沒有管理權限</h2>
+    <p>這個帳號不是管理員。員工請使用 <a href="index.html">打卡頁面</a>。</p>
+    <button class="secondary btnLogout">登出</button>
+  </div>
+
+  <div id="vMain" class="hidden">
+    <div class="tabs">
+      <button data-tab="tToday" class="on">每日出勤</button>
+      <button data-tab="tStaff">員工管理</button>
+      <button data-tab="tCor">補打卡審核 <span id="corCount"></span></button>
+      <button data-tab="tOffice">公司位置</button>
+      <button class="secondary btnLogout" style="margin-left:auto">登出</button>
+    </div>
+
+    <!-- 每日出勤 -->
+    <section id="tToday" class="card">
+      <div class="row" style="align-items:center">
+        <h2 style="margin:0">每日出勤</h2>
+        <input id="dayPick" type="date" style="max-width:200px">
+        <button id="btnReloadDay" class="secondary" style="max-width:120px">重新整理</button>
+      </div>
+      <p class="muted">上班 08:00 · 08:10 後打卡算遲到 · 下班 17:00</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>員工</th><th>公司</th><th>上班</th><th>下班</th><th>狀態</th><th>明細</th></tr></thead>
+          <tbody id="dayBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 員工管理 -->
+    <section id="tStaff" class="hidden">
+      <div class="card">
+        <h2>新增員工</h2>
+        <div class="row">
+          <div><label for="nEmpId">員工編號</label><input id="nEmpId" placeholder="W001 / S001 / C001" autocapitalize="characters"></div>
+          <div><label for="nName">姓名</label><input id="nName"></div>
+        </div>
+        <div class="row">
+          <div><label for="nCompany">公司</label><input id="nCompany" readonly placeholder="依編號開頭自動帶入"></div>
+          <div>
+            <label for="nRole">權限</label>
+            <select id="nRole"><option value="employee">一般員工</option><option value="admin">管理員</option></select>
+          </div>
+          <div><label for="nPw">初始密碼（至少 8 字元）</label><input id="nPw"></div>
+        </div>
+        <p class="muted">編號開頭：W = 唯修科技、S = 唯校中心、C = 傳創機電。員工第一次登入時會被要求改密碼。</p>
+        <button id="btnAdd">新增員工</button>
+        <div id="addMsg" class="msg hidden"></div>
+      </div>
+
+      <div class="card">
+        <h2>員工列表</h2>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>編號</th><th>姓名</th><th>公司</th><th>權限</th><th>手機綁定</th><th>操作</th></tr></thead>
+            <tbody id="staffBody"></tbody>
+          </table>
+        </div>
+        <div id="staffMsg" class="msg hidden"></div>
+      </div>
+
+      <div class="card" id="pwCard">
+        <h2>重設員工密碼</h2>
+        <div class="row">
+          <div><label for="rEmp">員工</label><select id="rEmp"></select></div>
+          <div><label for="rPw">新的臨時密碼（至少 8 字元）</label><input id="rPw"></div>
+        </div>
+        <button id="btnResetPw" style="margin-top:12px">重設密碼</button>
+        <div id="rMsg" class="msg hidden"></div>
+        <p class="muted">重設後請把臨時密碼告訴員工，員工登入時會被要求改成自己的密碼。</p>
+      </div>
+    </section>
+
+    <!-- 補打卡審核 -->
+    <section id="tCor" class="card hidden">
+      <h2>待審核的補打卡申請</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>員工</th><th>日期時間</th><th>類別</th><th>原因</th><th>操作</th></tr></thead>
+          <tbody id="corBody"></tbody>
+        </table>
+      </div>
+      <div id="corMsg" class="msg hidden"></div>
+    </section>
+
+    <!-- 公司位置 -->
+    <section id="tOffice" class="card hidden">
+      <h2>公司打卡位置</h2>
+      <p class="muted">建議拿手機站在公司裡，按「使用目前位置」，系統會以這個點為中心，在設定的半徑內才能內勤打卡。</p>
+      <label for="oAddr">地址（備註用）</label>
+      <input id="oAddr">
+      <div class="row">
+        <div><label for="oLat">緯度</label><input id="oLat" inputmode="decimal"></div>
+        <div><label for="oLng">經度</label><input id="oLng" inputmode="decimal"></div>
+        <div><label for="oRadius">打卡半徑（公尺）</label><input id="oRadius" type="number" min="50" max="2000"></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="btnHere" class="secondary">使用目前位置</button>
+        <button id="btnSaveOffice">儲存</button>
+      </div>
+      <div id="oMsg" class="msg hidden"></div>
+      <p class="muted" id="oMap"></p>
+    </section>
+  </div>
+</div>
+
+<script type="module" src="admin.js"></script>
+</body>
+</html>
