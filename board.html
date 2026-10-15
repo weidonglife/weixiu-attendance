@@ -3,13 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="vmark.png">
 <title>今日出勤看板</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="board.css">
 </head>
-<body>
+<body class="dark-page">
 <header class="top">
   <div class="inner">
-    <h1>唯修集團 今日出勤</h1>
+    <div class="brand"><img src="vmark.png" alt="WEIXIU 唯修"><h1>唯修集團 今日出勤</h1></div>
     <div class="who"><span id="who"></span> <button id="btnLogout" class="small secondary hidden" type="button">登出</button></div>
   </div>
 </header>
@@ -28,6 +33,7 @@
   <div id="vDenied" class="card hidden"><p id="deniedText"></p></div>
   <div id="vBoard" class="hidden"></div>
 </div>
+<div id="corner" class="corner hidden"><span id="whoCorner"></span> <button id="btnLogout2" class="small secondary" type="button">登出</button></div>
 <script type="module">
 import { auth, db, loginWithEmpId, logout, errMsg, showMsg, hideMsg } from "./common.js";
 import { startBoard } from "./board.js";
@@ -39,13 +45,20 @@ let stop = null;
 onAuthStateChanged(auth, async user => {
   if (stop) { stop(); stop = null; }
   $("btnLogout").classList.toggle("hidden", !user);
-  if (!user) { $("who").textContent = ""; show("vLogin"); return; }
+  if (!user) {
+    $("who").textContent = ""; show("vLogin");
+    document.querySelector("header.top").classList.remove("hidden");
+    $("corner").classList.add("hidden");
+    return;
+  }
   show("vLoading");
   try {
     const s = await getDoc(doc(db, "users", user.uid));
     if (!s.exists() || s.data().active !== true) { $("deniedText").textContent = "這個帳號目前無法使用，請聯絡管理員。"; show("vDenied"); return; }
-    $("who").textContent = `${s.data().name}（${s.data().empId}）`;
+    $("who").textContent = $("whoCorner").textContent = `${s.data().name}（${s.data().empId}）`;
     show("vBoard");
+    document.querySelector("header.top").classList.add("hidden");
+    $("corner").classList.remove("hidden");
     stop = startBoard($("vBoard"), { big: true });
   } catch (e) { $("deniedText").textContent = errMsg(e); show("vDenied"); }
 });
@@ -56,7 +69,7 @@ $("btnLogin").onclick = async () => {
   $("btnLogin").disabled = false;
 };
 $("loginPw").addEventListener("keydown", e => { if (e.key === "Enter") $("btnLogin").click(); });
-$("btnLogout").onclick = () => logout();
+$("btnLogout").onclick = $("btnLogout2").onclick = () => logout();
 </script>
 </body>
 </html>

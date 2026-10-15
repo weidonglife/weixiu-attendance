@@ -3,13 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="vmark.png">
 <title>打卡管理後台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="top">
   <div class="inner">
-    <h1>打卡系統 管理後台</h1>
+    <div class="brand"><img src="vmark.png" alt="WEIXIU 唯修"><h1>打卡系統 管理後台</h1></div>
     <div class="who" id="who"></div>
   </div>
 </header>
@@ -44,7 +48,7 @@
       <button data-tab="tRec">請假／加班紀錄</button>
       <button data-tab="tOffice">公司位置</button>
       <button data-tab="tHol">國定假日</button>
-      <a href="board.html" target="_blank" rel="noopener" style="align-self:center;padding:0 8px">今日出勤看板 ↗</a>
+      <a class="tablink" href="board.html" target="_blank" rel="noopener">開啟今日出勤看板（新視窗）</a>
       <button class="secondary btnLogout" style="margin-left:auto">登出</button>
     </div>
 
