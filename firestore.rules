@@ -103,7 +103,51 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ===== 請假／加班申請 =====
+    // 流程：員工送出 → 直屬主管（pending_supervisor）→ 管理員（pending_admin）→ 核准
+    match /requests/{id} {
+      allow get, list: if isAdmin()
+        || (isActive() && (resource.data.empId == me().empId || resource.data.supervisorEmpId == me().empId));
+
+      allow create: if isActive()
+        && request.resource.data.keys().hasOnly(['uid', 'empId', 'name', 'company', 'kind',
+             'leaveType', 'startDate', 'endDate', 'startHour', 'endHour',
+             'date', 'startTime', 'endTime', 'comp',
+             'hours', 'ym', 'reason', 'supervisorEmpId', 'status', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.empId == me().empId
+        && request.resource.data.name == me().name
+        && request.resource.data.company == me().company
+        && request.resource.data.kind in ['leave', 'overtime']
+        && request.resource.data.hours is number
+        && request.resource.data.hours > 0 && request.resource.data.hours <= 2000
+        && request.resource.data.ym is int
+        && request.resource.data.reason is string && request.resource.data.reason.size() > 0
+        && request.resource.data.supervisorEmpId == me().get('supervisorEmpId', null)
+        && request.resource.data.status == (request.resource.data.supervisorEmpId == null ? 'pending_admin' : 'pending_supervisor')
+        && request.resource.data.createdAt == request.time;
+
+      allow update: if isAdmin()
+        // 員工本人取消審核中的申請
+        || (isActive() && resource.data.empId == me().empId
+            && resource.data.status in ['pending_supervisor', 'pending_admin']
+            && request.resource.data.status == 'cancelled'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt']))
+        // 直屬主管審核（核准後送管理員，或駁回）
+        || (isActive() && resource.data.supervisorEmpId == me().empId
+            && resource.data.status == 'pending_supervisor'
+            && request.resource.data.status in ['pending_admin', 'rejected']
+            && request.resource.data.supBy == me().empId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'supBy', 'supAt', 'supNote']));
+
+      allow delete: if false;
+    }
+
     // ===== 系統設定 =====
+    match /settings/holidays {
+      allow get: if isActive();
+      allow write: if isAdmin();
+    }
     match /settings/office {
       allow get: if isActive();
       allow write: if isAdmin();

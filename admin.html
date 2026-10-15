@@ -37,9 +37,13 @@
   <div id="vMain" class="hidden">
     <div class="tabs">
       <button data-tab="tToday" class="on">每日出勤</button>
+      <button data-tab="tReport">月報表</button>
       <button data-tab="tStaff">員工管理</button>
       <button data-tab="tCor">補打卡審核 <span id="corCount"></span></button>
+      <button data-tab="tReq">請假／加班審核 <span id="reqCount"></span></button>
+      <button data-tab="tRec">請假／加班紀錄</button>
       <button data-tab="tOffice">公司位置</button>
+      <button data-tab="tHol">國定假日</button>
       <button class="secondary btnLogout" style="margin-left:auto">登出</button>
     </div>
 
@@ -59,6 +63,61 @@
       </div>
     </section>
 
+    <!-- 月報表 -->
+    <section id="tReport" class="hidden">
+      <div class="card">
+        <div class="row" style="align-items:center">
+          <h2 style="margin:0">月出勤報表</h2>
+          <input id="rptMonth" type="month" style="max-width:200px">
+          <button id="btnRpt" class="secondary" style="max-width:120px">重新計算</button>
+          <button id="btnRptXlsx" style="max-width:180px">匯出 Excel</button>
+        </div>
+        <p class="muted" id="rptNote">統計到昨天為止；遲到以 08:10 後打卡計，遲到分鐘數從 08:00 起算。請假時段不算遲到或早退。</p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr>
+              <th>員工</th><th>應出勤</th><th>出勤</th><th>全天請假</th><th>未打卡</th>
+              <th>遲到</th><th>早退</th><th>漏打卡</th><th>特休</th><th>病假</th><th>事假</th><th>其他假</th><th>加班</th>
+            </tr></thead>
+            <tbody id="rptSum"></tbody>
+          </table>
+        </div>
+        <div id="rptMsg" class="msg hidden"></div>
+      </div>
+
+      <div class="card">
+        <h2>異常清單 <span id="anoCount" class="muted"></span></h2>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>日期</th><th>員工</th><th>上班</th><th>下班</th><th>異常</th></tr></thead>
+            <tbody id="anoBody"></tbody>
+          </table>
+        </div>
+        <p class="muted">員工忘記打卡，請請他們在打卡頁「申請補打卡」，由你在「補打卡審核」核准後，異常就會消失。</p>
+      </div>
+
+      <div class="card">
+        <h2>特休／補休餘額總覽</h2>
+        <p class="muted">依勞基法，特休年度結束時還沒休完的天數，應發給工資（或經勞資雙方同意遞延到下一年度）。距離年度結束 60 天內、還有剩餘特休的員工會以橘色標示。</p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>員工</th><th>到職日</th><th>本年度期間</th><th>年度天數</th><th>已用（含審核中）</th><th>特休剩餘</th><th>補休剩餘</th></tr></thead>
+            <tbody id="balBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>年度完整備份</h2>
+        <p class="muted">勞基法規定出勤紀錄要保存 5 年。建議每年（或每季）匯出一次，存到公司的雲端硬碟或 NAS。資料庫本身也會一直保留，這是額外的保險。</p>
+        <div class="row" style="align-items:flex-end">
+          <div><label for="bkYear">年度</label><input id="bkYear" type="number" min="2020" max="2100" style="max-width:140px"></div>
+          <div><button id="btnBackup">匯出全年備份（Excel）</button></div>
+        </div>
+        <div id="bkMsg" class="msg hidden"></div>
+      </div>
+    </section>
+
     <!-- 員工管理 -->
     <section id="tStaff" class="hidden">
       <div class="card">
@@ -75,6 +134,10 @@
           </div>
           <div><label for="nPw">初始密碼（至少 8 字元）</label><input id="nPw"></div>
         </div>
+        <div class="row">
+          <div><label for="nHire">到職日（計算特休用）</label><input id="nHire" type="date"></div>
+          <div><label for="nSup">直屬主管（第一關審核）</label><select id="nSup"></select></div>
+        </div>
         <p class="muted">編號開頭：W = 唯修科技、S = 唯校中心、C = 傳創機電。員工第一次登入時會被要求改密碼。</p>
         <button id="btnAdd">新增員工</button>
         <div id="addMsg" class="msg hidden"></div>
@@ -84,11 +147,31 @@
         <h2>員工列表</h2>
         <div class="table-scroll">
           <table>
-            <thead><tr><th>編號</th><th>姓名</th><th>公司</th><th>權限</th><th>手機綁定</th><th>操作</th></tr></thead>
+            <thead><tr><th>編號</th><th>姓名</th><th>公司</th><th>權限</th><th>到職日</th><th>直屬主管</th><th>手機綁定</th><th>操作</th></tr></thead>
             <tbody id="staffBody"></tbody>
           </table>
         </div>
         <div id="staffMsg" class="msg hidden"></div>
+      </div>
+
+      <div class="card">
+        <h2>編輯員工資料</h2>
+        <label for="eEmp">員工</label>
+        <select id="eEmp"></select>
+        <div class="row">
+          <div><label for="eName">姓名</label><input id="eName"></div>
+          <div>
+            <label for="eRole">權限</label>
+            <select id="eRole"><option value="employee">一般員工</option><option value="admin">管理員</option></select>
+          </div>
+        </div>
+        <div class="row">
+          <div><label for="eHire">到職日</label><input id="eHire" type="date"></div>
+          <div><label for="eSup">直屬主管</label><select id="eSup"></select></div>
+        </div>
+        <button id="btnEdit" style="margin-top:12px">儲存變更</button>
+        <div id="eMsg" class="msg hidden"></div>
+        <p class="muted">直屬主管會在自己的打卡頁看到「待我審核」，核准後再送到管理員做最終核准。沒有設定主管的員工，申請會直接送給管理員。</p>
       </div>
 
       <div class="card" id="pwCard">
@@ -113,6 +196,46 @@
         </table>
       </div>
       <div id="corMsg" class="msg hidden"></div>
+    </section>
+
+    <!-- 請假／加班審核 -->
+    <section id="tReq" class="card hidden">
+      <h2>待核准的請假／加班</h2>
+      <p class="muted">管理員核准後即生效。還在「待主管審核」的申請，管理員也可以直接核准（略過主管）。</p>
+      <div id="reqBody" class="muted">載入中…</div>
+      <div id="reqMsg" class="msg hidden"></div>
+    </section>
+
+    <!-- 請假／加班紀錄 -->
+    <section id="tRec" class="hidden">
+      <div class="card">
+        <div class="row" style="align-items:center">
+          <h2 style="margin:0">每月統計（已核准）</h2>
+          <input id="recMonth" type="month" style="max-width:200px">
+        </div>
+        <p class="muted">依申請的開始日期歸入月份；單位為小時。</p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>員工</th><th>特休</th><th>補休</th><th>事假</th><th>病假</th><th>其他假</th><th>加班（加班費）</th><th>加班（換補休）</th></tr></thead>
+            <tbody id="recSum"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>當月所有申請</h2>
+        <div id="recList" class="muted">載入中…</div>
+        <div id="recMsg" class="msg hidden"></div>
+      </div>
+    </section>
+
+    <!-- 國定假日 -->
+    <section id="tHol" class="card hidden">
+      <h2>國定假日設定</h2>
+      <p class="muted">每行一天，格式：<code>2026-12-25 行憲紀念日</code>。設定後，請假時數會自動扣除這些日子，出勤表也不會把這些日子算成未打卡。週六、週日已自動視為假日，不用填。<br>
+        <b>補班日</b>：名稱寫「補班」即可，例如 <code>2027-02-20 補班</code>，那天就會當成一般上班日。</p>
+      <textarea id="holText" style="min-height:220px;font-family:monospace"></textarea>
+      <button id="btnSaveHol" style="margin-top:12px">儲存</button>
+      <div id="holMsg" class="msg hidden"></div>
     </section>
 
     <!-- 公司位置 -->

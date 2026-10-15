@@ -1,9 +1,12 @@
-// 員工打卡頁
+// 員工打卡頁（含請假／加班／主管審核）
 import {
   auth, db, loginWithEmpId, logout, getDeviceId, getPosition, distanceM,
-  fmtTime, fmtTimeSec, fmtDateLong, fmtYmd, ymOf, ymdOf, daysInYm, weekdayOfYmd,
+  fmtTime, fmtTimeSec, fmtDateLong, fmtYmd, ymOf, ymdOf, daysInYm, ymdToInput,
   summarizeDay, tagsHtml, MODE_LABEL, TYPE_LABEL, esc, errMsg, showMsg, hideMsg,
-  checkNewPassword, WORK
+  checkNewPassword, WORK,
+  todayStr, ymOfStr, toHolidayMap, isOffDay, offDayLabel, buildLeaveMap, calcLeaveHours, calcOtHours,
+  computeBalances, fmtHours, LEAVE_TYPES, STATUS_INFO, ACTIVE_STATUS, OT_MONTH_LIMIT,
+  reqTitle, reqWhen, reqSortKey, leaveOverlaps, fmtDateStr
 } from "./common.js";
 import { onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -16,6 +19,8 @@ function show(v) { views.forEach(x => $(x).classList.toggle("hidden", x !== v));
 
 let me = null;        // 目前登入員工的資料
 let office = null;    // 公司位置設定
+let holidays = new Map(); // 國定假日
+let myReqs = [];      // 我的請假／加班申請
 let mode = "office";  // office | field
 const deviceId = getDeviceId();
 
@@ -53,8 +58,12 @@ onAuthStateChanged(auth, async user => {
         "你的帳號已綁定另一支手機（或瀏覽器資料被清除）。如果換了手機，請聯絡管理員重設手機綁定。");
     }
 
-    const oSnap = await getDoc(doc(db, "settings", "office"));
+    const [oSnap, hSnap] = await Promise.all([
+      getDoc(doc(db, "settings", "office")),
+      getDoc(doc(db, "settings", "holidays"))
+    ]);
     office = oSnap.exists() ? oSnap.data() : null;
+    holidays = toHolidayMap(hSnap.exists() ? hSnap.data().list : []);
 
     show("vMain");
     initMain();
@@ -96,19 +105,29 @@ $("btnChangePw").onclick = async () => {
 
 $("btnLogout").onclick = $("btnBlockedLogout").onclick = () => logout();
 
+// ===== 分頁 =====
+document.querySelectorAll("#mainTabs button[data-tab]").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll("#mainTabs button[data-tab]").forEach(b => b.classList.toggle("on", b === btn));
+    ["pPunch", "pLeave", "pReview"].forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.tab));
+  };
+});
+
 // ===== 主畫面 =====
 let mainReady = false;
-function initMain() {
-  const now = new Date();
-  const ym = ymOf(now);
+async function initMain() {
+  const ym = ymOf(new Date());
   $("monthPick").value = `${String(ym).slice(0, 4)}-${String(ym).slice(4)}`;
   if (!mainReady) {
     $("monthPick").onchange = () => loadMonth();
+    initLeaveForm();
     mainReady = true;
   }
   loadToday();
-  loadMonth();
   loadCorrections();
+  await loadRequests();
+  loadMonth();
+  loadReview();
 }
 
 function setMode(m) {
@@ -194,22 +213,33 @@ async function loadMonth() {
     const list = await fetchPunches(ym);
     const byDay = {};
     list.forEach(p => (byDay[p.ymd] = byDay[p.ymd] || []).push(p));
+    const leaveMap = buildLeaveMap(myReqs.filter(r => r.kind === "leave" && r.status === "approved"), holidays);
     const todayYmd = ymdOf(new Date());
     const rows = [];
     for (let d = 1; d <= daysInYm(ym); d++) {
       const ymd = ym * 100 + d;
       if (ymd > todayYmd) break;
+      const ds = ymdToInput(ymd);
       const dayList = byDay[ymd] || [];
-      const wd = weekdayOfYmd(ymd);
-      if (!dayList.length && (wd === 0 || wd === 6)) continue; // 週末沒打卡就略過
+      const wins = leaveMap[ds] || [];
+      const isToday = ymd === todayYmd;
       if (!dayList.length) {
-        if (ymd === todayYmd) continue;
-        rows.push(`<tr><td>${fmtYmd(ymd)}</td><td>—</td><td>—</td><td><span class="tag warn">未打卡</span></td></tr>`);
+        if (isOffDay(ds, holidays)) continue; // 假日沒打卡就略過
+        if (office && office.goLive && ds < office.goLive) continue; // 系統啟用前
+        if (me.hireDate && ds < me.hireDate) continue; // 到職前
+        const s = summarizeDay([], wins);
+        if (s.fullLeave) {
+          rows.push(`<tr><td>${fmtYmd(ymd)}</td><td>—</td><td>—</td><td>${tagsHtml(s.tags)}</td></tr>`);
+        } else if (!isToday) {
+          const tags = [["warn", "未打卡"]].concat(wins.length ? [["field", `請假 ${s.leaveHours}h`]] : []);
+          rows.push(`<tr><td>${fmtYmd(ymd)}</td><td>—</td><td>—</td><td>${tagsHtml(tags)}</td></tr>`);
+        }
         continue;
       }
-      const s = summarizeDay(dayList);
-      const isToday = ymd === todayYmd;
-      const tags = isToday ? s.tags.filter(t => t[1] !== "未打下班卡" && t[1] !== "早退") : s.tags;
+      const s = summarizeDay(dayList, wins);
+      let tags = isToday ? s.tags.filter(t => t[1] !== "未打下班卡" && t[1] !== "早退") : s.tags;
+      const off = offDayLabel(ds, holidays);
+      if (off) tags = [["gray", off]].concat(tags.filter(t => t[1] !== "未打上班卡" && t[1] !== "未打下班卡" && t[1] !== "遲到" && t[1] !== "早退"));
       rows.push(`<tr><td>${fmtYmd(ymd)}</td>
         <td>${s.firstIn ? fmtTime(s.firstIn.ts) : "—"}</td>
         <td>${s.lastOut ? fmtTime(s.lastOut.ts) : "—"}</td>
@@ -240,7 +270,7 @@ $("btnCor").onclick = async () => {
   $("btnCor").disabled = false;
 };
 
-const STATUS = { pending: ["warn", "審核中"], approved: ["ok", "已核准"], rejected: ["late", "已駁回"] };
+const COR_STATUS = { pending: ["warn", "審核中"], approved: ["ok", "已核准"], rejected: ["late", "已駁回"] };
 async function loadCorrections() {
   try {
     const snap = await getDocs(query(collection(db, "corrections"), where("empId", "==", me.empId)));
@@ -248,12 +278,279 @@ async function loadCorrections() {
     $("corList").innerHTML = list.length
       ? `<table><tbody>${list.map(c => `<tr>
           <td>${esc(c.date.slice(5))} ${esc(c.time)}</td><td>${TYPE_LABEL[c.type]}</td>
-          <td>${tagsHtml([STATUS[c.status] || ["gray", c.status]])}</td>
+          <td>${tagsHtml([COR_STATUS[c.status] || ["gray", c.status]])}</td>
           <td class="muted">${esc(c.reason)}</td></tr>`).join("")}</tbody></table>`
       : "尚無申請";
   } catch (e) { $("corList").textContent = errMsg(e); }
 }
 
 // 預設補打卡日期為今天、時間為上班時間
-$("corDate").value = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+$("corDate").value = todayStr();
 $("corTime").value = WORK.start;
+
+// ===================================================================
+// 請假／加班
+// ===================================================================
+function hourOptions(sel, def) {
+  sel.innerHTML = Array.from({ length: 10 }, (_, i) => i + 8)
+    .map(h => `<option value="${h}"${h === def ? " selected" : ""}>${String(h).padStart(2, "0")}:00</option>`).join("");
+}
+
+function initLeaveForm() {
+  $("lvType").innerHTML = LEAVE_TYPES.map(t => `<option value="${t.key}">${esc(t.label)}</option>`).join("");
+  hourOptions($("lvStartHour"), 8);
+  hourOptions($("lvEndHour"), 17);
+  const t = todayStr();
+  $("lvStartDate").value = $("lvEndDate").value = t;
+  $("otDate").value = t;
+  $("otStart").value = "17:00";
+  $("otEnd").value = "19:00";
+  ["lvType", "lvStartDate", "lvStartHour", "lvEndDate", "lvEndHour"].forEach(id => $(id).addEventListener("change", updateLeaveCalc));
+  $("lvStartDate").addEventListener("change", () => {
+    if ($("lvEndDate").value < $("lvStartDate").value) $("lvEndDate").value = $("lvStartDate").value;
+    updateLeaveCalc();
+  });
+  ["otDate", "otStart", "otEnd", "otComp"].forEach(id => $(id).addEventListener("change", updateOtCalc));
+  ["lvType", "lvStartDate", "lvStartHour", "lvEndDate", "lvEndHour"].forEach(id => $(id).addEventListener("change", () => hideMsg($("lvMsg"))));
+  ["otDate", "otStart", "otEnd", "otComp"].forEach(id => $(id).addEventListener("change", () => hideMsg($("otMsg"))));
+  updateLeaveCalc(); updateOtCalc();
+}
+
+function leaveDraft() {
+  return {
+    leaveType: $("lvType").value,
+    startDate: $("lvStartDate").value, endDate: $("lvEndDate").value,
+    startHour: Number($("lvStartHour").value), endHour: Number($("lvEndHour").value)
+  };
+}
+function balances() { return computeBalances(myReqs, me.hireDate, todayStr()); }
+
+// 檢查假單，回傳 { hours, error }
+function checkLeave(r) {
+  if (!r.startDate || !r.endDate) return { hours: 0, error: "請選擇日期" };
+  if (r.endDate < r.startDate) return { hours: 0, error: "結束日期不能早於開始日期" };
+  if (r.startDate === r.endDate && r.endHour <= r.startHour) return { hours: 0, error: "結束時間要晚於開始時間" };
+  const hours = calcLeaveHours(r, holidays);
+  if (hours <= 0) return { hours, error: "這段時間都不是上班時間（週末、國定假日或午休），不需要請假" };
+  const b = balances();
+  if (r.leaveType === "annual") {
+    if (!me.hireDate) return { hours, error: "管理員尚未設定你的到職日，暫時無法計算特休，請先聯絡管理員" };
+    if (hours > b.annualLeft) return { hours, error: `特休不足：剩餘 ${fmtHours(b.annualLeft)}，這次需要 ${fmtHours(hours)}` };
+  }
+  if (r.leaveType === "comp" && hours > b.compLeft) {
+    return { hours, error: `補休不足：剩餘 ${fmtHours(b.compLeft)}，這次需要 ${fmtHours(hours)}` };
+  }
+  const clash = myReqs.find(x => x.kind === "leave" && ACTIVE_STATUS.includes(x.status) && leaveOverlaps(r, x, holidays));
+  if (clash) return { hours, error: `和已申請的假單時間重疊（${reqTitle(clash)}：${reqWhen(clash)}）` };
+  return { hours, error: "" };
+}
+
+function updateLeaveCalc() {
+  const t = LEAVE_TYPES.find(x => x.key === $("lvType").value);
+  $("lvTypeNote").textContent = t && t.note ? t.note : "";
+  if (!me) return;
+  const { hours, error } = checkLeave(leaveDraft());
+  const el = $("lvCalc");
+  el.classList.toggle("err", !!error);
+  el.textContent = error || `共請假 ${fmtHours(hours)}（${hours} 小時，已扣除午休與假日）`;
+}
+
+function otDraft() {
+  return { date: $("otDate").value, startTime: $("otStart").value, endTime: $("otEnd").value, comp: $("otComp").value };
+}
+function checkOt(r) {
+  if (!r.date || !r.startTime || !r.endTime) return { hours: 0, error: "請填寫日期與時間" };
+  const hours = calcOtHours(r.startTime, r.endTime);
+  if (hours <= 0) return { hours, error: "結束時間要晚於開始時間（不能跨過午夜，跨日請分兩張申請）" };
+  if (Math.round(hours * 2) !== hours * 2) return { hours, error: "加班時間請以 30 分鐘為單位" };
+  const clash = myReqs.find(x => x.kind === "overtime" && ACTIVE_STATUS.includes(x.status) && x.date === r.date
+    && r.startTime < x.endTime && x.startTime < r.endTime);
+  if (clash) return { hours, error: `和已申請的加班時間重疊（${reqWhen(clash)}）` };
+  return { hours, error: "" };
+}
+function otMonthTotal(dateStr) {
+  const ym = ymOfStr(dateStr);
+  return myReqs.filter(x => x.kind === "overtime" && ACTIVE_STATUS.includes(x.status) && x.ym === ym)
+    .reduce((a, x) => a + x.hours, 0);
+}
+let otConfirm = false;
+function updateOtCalc() {
+  otConfirm = false;
+  $("btnOT").textContent = "送出加班申請";
+  if (!me) return;
+  const r = otDraft();
+  const { hours, error } = checkOt(r);
+  const el = $("otCalc");
+  el.classList.toggle("err", !!error);
+  if (error) { el.textContent = error; return; }
+  const month = otMonthTotal(r.date) + hours;
+  el.textContent = `共加班 ${hours} 小時（本月累計 ${month} 小時）`;
+}
+
+$("btnLeave").onclick = async () => {
+  const msg = $("lvMsg");
+  const r = leaveDraft();
+  const reason = $("lvReason").value.trim();
+  const { hours, error } = checkLeave(r);
+  if (error) { showMsg(msg, error, "err"); return; }
+  if (!reason) { showMsg(msg, "請填寫事由", "err"); return; }
+  $("btnLeave").disabled = true;
+  try {
+    const sup = me.supervisorEmpId || null;
+    await addDoc(collection(db, "requests"), {
+      uid: me.uid, empId: me.empId, name: me.name, company: me.company,
+      kind: "leave", ...r, hours, ym: ymOfStr(r.startDate), reason,
+      supervisorEmpId: sup, status: sup ? "pending_supervisor" : "pending_admin",
+      createdAt: serverTimestamp()
+    });
+    showMsg(msg, sup ? "已送出，等待主管審核" : "已送出，等待管理員核准", "ok");
+    $("lvReason").value = "";
+    await loadRequests();
+    updateLeaveCalc();
+  } catch (e) { showMsg(msg, errMsg(e), "err"); }
+  $("btnLeave").disabled = false;
+};
+
+$("btnOT").onclick = async () => {
+  const msg = $("otMsg");
+  const r = otDraft();
+  const reason = $("otReason").value.trim();
+  const { hours, error } = checkOt(r);
+  if (error) { showMsg(msg, error, "err"); return; }
+  if (!reason) { showMsg(msg, "請填寫加班事由", "err"); return; }
+  const month = otMonthTotal(r.date) + hours;
+  if (month > OT_MONTH_LIMIT && !otConfirm) {
+    otConfirm = true;
+    $("btnOT").textContent = "確定仍要送出";
+    showMsg(msg, `注意：送出後本月加班將達 ${month} 小時，超過勞基法每月 ${OT_MONTH_LIMIT} 小時的上限（經勞資會議同意者最多 54 小時）。確定要送出請再按一次。`, "err");
+    return;
+  }
+  $("btnOT").disabled = true;
+  try {
+    const sup = me.supervisorEmpId || null;
+    await addDoc(collection(db, "requests"), {
+      uid: me.uid, empId: me.empId, name: me.name, company: me.company,
+      kind: "overtime", ...r, hours, ym: ymOfStr(r.date), reason,
+      supervisorEmpId: sup, status: sup ? "pending_supervisor" : "pending_admin",
+      createdAt: serverTimestamp()
+    });
+    showMsg(msg, sup ? "已送出，等待主管審核" : "已送出，等待管理員核准", "ok");
+    $("otReason").value = "";
+    await loadRequests();
+    updateOtCalc();
+  } catch (e) { showMsg(msg, errMsg(e), "err"); }
+  $("btnOT").disabled = false;
+};
+
+async function loadRequests() {
+  try {
+    const snap = await getDocs(query(collection(db, "requests"), where("empId", "==", me.empId)));
+    myReqs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderBalances();
+    renderMyRequests();
+  } catch (e) {
+    $("balBox").textContent = errMsg(e);
+    $("reqList").textContent = errMsg(e);
+  }
+}
+
+function renderBalances() {
+  const b = balances();
+  let annual;
+  if (!me.hireDate) {
+    annual = `<div><div class="sub">特休</div><div class="num">—</div><div class="sub">管理員尚未設定到職日</div></div>`;
+  } else if (!b.ent.start) {
+    annual = `<div><div class="sub">特休</div><div class="num">0</div><div class="sub">${esc(b.ent.end)} 起可休 3 天</div></div>`;
+  } else {
+    annual = `<div><div class="sub">特休剩餘</div><div class="num">${fmtHours(b.annualLeft)}</div>
+      <div class="sub">本年度 ${b.ent.days} 天，已用 ${fmtHours(b.annualUsed)}（含審核中）<br>年度期間 ${esc(b.ent.start)} ～ ${esc(b.ent.end)}</div></div>`;
+  }
+  const comp = `<div><div class="sub">補休剩餘</div><div class="num">${fmtHours(b.compLeft)}</div>
+    <div class="sub">加班換得 ${b.compEarned} 小時，已用 ${b.compUsed} 小時</div></div>`;
+  // 今年各假別使用（已核准）
+  const year = todayStr().slice(0, 4);
+  const used = {};
+  myReqs.filter(r => r.kind === "leave" && r.status === "approved" && r.startDate.startsWith(year))
+    .forEach(r => { used[r.leaveType] = (used[r.leaveType] || 0) + r.hours; });
+  const usedTxt = LEAVE_TYPES.filter(t => used[t.key]).map(t => `${t.label} ${fmtHours(used[t.key])}`).join("、");
+  $("balBox").innerHTML = `<div class="bal">${annual}${comp}</div>
+    <p class="muted" style="margin:10px 0 0">${year} 年已核准請假：${usedTxt ? esc(usedTxt) : "無"}</p>`;
+}
+
+function statusTag(r) { return tagsHtml([STATUS_INFO[r.status] || ["gray", r.status]]); }
+function noteLines(r) {
+  const out = [];
+  if (r.supNote) out.push(`主管意見：${esc(r.supNote)}`);
+  if (r.adminNote) out.push(`管理員意見：${esc(r.adminNote)}`);
+  return out.length ? `<div class="meta">${out.join("<br>")}</div>` : "";
+}
+
+function renderMyRequests() {
+  const list = [...myReqs].sort((a, b) => reqSortKey(b).localeCompare(reqSortKey(a))).slice(0, 30);
+  $("reqList").innerHTML = list.length ? list.map(r => `<div class="req">
+      <div class="top"><span class="title">${esc(reqTitle(r))}・${r.hours} 小時</span>${statusTag(r)}</div>
+      <div class="meta">${esc(reqWhen(r))}</div>
+      <div class="meta">事由：${esc(r.reason)}</div>
+      ${noteLines(r)}
+      ${r.status === "pending_supervisor" || r.status === "pending_admin"
+        ? `<div class="acts"><button class="small secondary" data-cancel="${r.id}">取消申請</button></div>` : ""}
+    </div>`).join("") : "尚無申請";
+}
+
+$("reqList").onclick = async e => {
+  const btn = e.target.closest("button[data-cancel]");
+  if (!btn) return;
+  if (!btn.dataset.confirm) { btn.dataset.confirm = "1"; btn.textContent = "確定取消？"; return; }
+  btn.disabled = true;
+  try {
+    await updateDoc(doc(db, "requests", btn.dataset.cancel), { status: "cancelled", cancelledAt: serverTimestamp() });
+    showMsg($("reqMsg"), "已取消申請", "ok");
+    await loadRequests();
+    updateLeaveCalc(); updateOtCalc();
+  } catch (err) { showMsg($("reqMsg"), errMsg(err), "err"); btn.disabled = false; }
+};
+
+// ===================================================================
+// 主管審核（只有被設定為主管的人才會看到）
+// ===================================================================
+let teamReqs = [];
+async function loadReview() {
+  try {
+    const snap = await getDocs(query(collection(db, "requests"), where("supervisorEmpId", "==", me.empId)));
+    teamReqs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) { teamReqs = []; }
+  const pending = teamReqs.filter(r => r.status === "pending_supervisor").sort((a, b) => reqSortKey(a).localeCompare(reqSortKey(b)));
+  const hist = teamReqs.filter(r => r.status !== "pending_supervisor").sort((a, b) => reqSortKey(b).localeCompare(reqSortKey(a))).slice(0, 20);
+  $("tabReview").classList.toggle("hidden", teamReqs.length === 0);
+  $("revCount").textContent = pending.length ? `(${pending.length})` : "";
+  $("revList").innerHTML = pending.length ? pending.map(r => `<div class="req">
+      <div class="top"><span class="title">${esc(r.name)}（${esc(r.empId)}）・${esc(reqTitle(r))}・${r.hours} 小時</span>${statusTag(r)}</div>
+      <div class="meta">${esc(reqWhen(r))}</div>
+      <div class="meta">事由：${esc(r.reason)}</div>
+      <div class="acts">
+        <input placeholder="意見（選填）" data-note="${r.id}">
+        <button class="small" data-act="approve" data-id="${r.id}">核准</button>
+        <button class="small danger" data-act="reject" data-id="${r.id}">駁回</button>
+      </div></div>`).join("") : "目前沒有待審核的申請";
+  $("revHist").innerHTML = hist.length ? hist.map(r => `<div class="req">
+      <div class="top"><span class="title">${esc(r.name)}・${esc(reqTitle(r))}・${r.hours} 小時</span>${statusTag(r)}</div>
+      <div class="meta">${esc(reqWhen(r))}</div>${noteLines(r)}</div>`).join("") : "尚無紀錄";
+}
+
+$("revList").onclick = async e => {
+  const btn = e.target.closest("button[data-act]");
+  if (!btn) return;
+  const r = teamReqs.find(x => x.id === btn.dataset.id);
+  if (!r) return;
+  const note = (document.querySelector(`input[data-note="${r.id}"]`)?.value || "").trim();
+  btn.disabled = true;
+  try {
+    await updateDoc(doc(db, "requests", r.id), {
+      status: btn.dataset.act === "approve" ? "pending_admin" : "rejected",
+      supBy: me.empId, supAt: serverTimestamp(), supNote: note
+    });
+    showMsg($("revMsg"), btn.dataset.act === "approve"
+      ? `已核准 ${r.name} 的申請，已送交管理員做最終核准` : `已駁回 ${r.name} 的申請`, "ok");
+    loadReview();
+  } catch (err) { showMsg($("revMsg"), errMsg(err), "err"); btn.disabled = false; }
+};

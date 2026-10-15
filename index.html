@@ -52,6 +52,13 @@
 
   <!-- 主畫面 -->
   <div id="vMain" class="hidden">
+    <div class="tabs" id="mainTabs">
+      <button data-tab="pPunch" class="on" type="button">打卡</button>
+      <button data-tab="pLeave" type="button">請假／加班</button>
+      <button data-tab="pReview" id="tabReview" class="hidden" type="button">待我審核 <span id="revCount"></span></button>
+    </div>
+
+  <section id="pPunch">
     <div class="card clock">
       <div class="time" id="clockTime">--:--:--</div>
       <div class="date" id="clockDate"></div>
@@ -109,6 +116,74 @@
       <h2 style="margin-top:20px">我的補打卡申請</h2>
       <div id="corList" class="muted">尚無申請</div>
     </div>
+  </section>
+
+  <!-- 請假／加班 -->
+  <section id="pLeave" class="hidden">
+    <div class="card">
+      <h2>我的假別餘額</h2>
+      <div id="balBox" class="muted">載入中…</div>
+    </div>
+
+    <div class="card">
+      <h2>申請請假</h2>
+      <label for="lvType">假別</label>
+      <select id="lvType"></select>
+      <p id="lvTypeNote" class="muted" style="margin:4px 0 0"></p>
+      <div class="row">
+        <div><label for="lvStartDate">開始日期</label><input id="lvStartDate" type="date"></div>
+        <div><label for="lvStartHour">開始時間</label><select id="lvStartHour"></select></div>
+      </div>
+      <div class="row">
+        <div><label for="lvEndDate">結束日期</label><input id="lvEndDate" type="date"></div>
+        <div><label for="lvEndHour">結束時間</label><select id="lvEndHour"></select></div>
+      </div>
+      <p id="lvCalc" class="calc"></p>
+      <label for="lvReason">事由（必填）</label>
+      <textarea id="lvReason"></textarea>
+      <button id="btnLeave" class="block">送出請假申請</button>
+      <div id="lvMsg" class="msg hidden"></div>
+    </div>
+
+    <div class="card">
+      <h2>申請加班</h2>
+      <div class="row">
+        <div><label for="otDate">日期</label><input id="otDate" type="date"></div>
+        <div><label for="otStart">開始時間</label><input id="otStart" type="time" step="1800"></div>
+        <div><label for="otEnd">結束時間</label><input id="otEnd" type="time" step="1800"></div>
+      </div>
+      <label for="otComp">補償方式</label>
+      <select id="otComp">
+        <option value="pay">領加班費</option>
+        <option value="comp">換成補休</option>
+      </select>
+      <p id="otCalc" class="calc"></p>
+      <label for="otReason">加班事由（必填）</label>
+      <textarea id="otReason" placeholder="例如：趕修客戶急件 Agilent 3458A"></textarea>
+      <button id="btnOT" class="block">送出加班申請</button>
+      <div id="otMsg" class="msg hidden"></div>
+    </div>
+
+    <div class="card">
+      <h2>我的申請紀錄</h2>
+      <div id="reqList" class="muted">尚無申請</div>
+      <div id="reqMsg" class="msg hidden"></div>
+    </div>
+  </section>
+
+  <!-- 主管審核 -->
+  <section id="pReview" class="hidden">
+    <div class="card">
+      <h2>待我審核</h2>
+      <p class="muted">你核准後，會再送到管理員做最終核准。</p>
+      <div id="revList" class="muted">目前沒有待審核的申請</div>
+      <div id="revMsg" class="msg hidden"></div>
+    </div>
+    <div class="card">
+      <h2>最近審核紀錄</h2>
+      <div id="revHist" class="muted">尚無紀錄</div>
+    </div>
+  </section>
 
     <button id="btnLogout" class="secondary block">登出</button>
   </div>

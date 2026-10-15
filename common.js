@@ -80,28 +80,327 @@ export function inputToYmd(v) { return Number(v.replace(/-/g, "")); }
 export function daysInYm(ym) { const y = Math.floor(ym / 100), m = ym % 100; return new Date(Date.UTC(y, m, 0)).getUTCDate(); }
 
 // ===== 打卡判定 =====
-// 傳入同一天的打卡紀錄（含 ts:Date、type），回傳上班／下班時間與狀態
-export function summarizeDay(list) {
+// list：同一天的打卡紀錄（含 ts:Date、type）
+// wins：當天已核准的請假時段 [{s, e, hours}]（s、e 為整點，例如 8、12）
+// 請假會把「應上班時間」往後推、「應下班時間」往前移，避免請假時段被判成遲到或早退
+const GRACE_MIN = 10;
+function toMin(hhmm) { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; }
+export function summarizeDay(list, wins = []) {
   const sorted = [...list].sort((a, b) => a.ts - b.ts);
   const ins = sorted.filter(p => p.type === "in");
   const outs = sorted.filter(p => p.type === "out");
   const firstIn = ins[0] || null;
   const lastOut = outs[outs.length - 1] || null;
+
+  let effStart = 8, effEnd = 17;
+  for (let guard = 0, changed = true; changed && guard < 20; guard++) {
+    changed = false;
+    for (const w of wins) {
+      if (w.s <= effStart && w.e > effStart) { effStart = w.e; changed = true; }
+      if (w.e >= effEnd && w.s < effEnd) { effEnd = w.s; changed = true; }
+    }
+    if (effStart >= 12 && effStart < 13) { effStart = 13; changed = true; }
+    if (effEnd > 12 && effEnd <= 13) { effEnd = 12; changed = true; }
+  }
+  const fullLeave = wins.length > 0 && effStart >= effEnd;
+  const leaveHours = wins.reduce((a, w) => a + w.hours, 0);
+
   const tags = [];
-  if (!firstIn) tags.push(["warn", "未打上班卡"]);
-  else if (fmtTime(firstIn.ts) > WORK.lateAfter) tags.push(["late", "遲到"]);
-  if (!lastOut) tags.push(["warn", "未打下班卡"]);
-  else if (fmtTime(lastOut.ts) < WORK.end) tags.push(["late", "早退"]);
+  if (fullLeave) {
+    tags.push(["field", "請假"]);
+  } else {
+    if (!firstIn) tags.push(["warn", "未打上班卡"]);
+    else if (toMin(fmtTime(firstIn.ts)) > effStart * 60 + GRACE_MIN) tags.push(["late", "遲到"]);
+    if (!lastOut) tags.push(["warn", "未打下班卡"]);
+    else if (toMin(fmtTime(lastOut.ts)) < effEnd * 60) tags.push(["late", "早退"]);
+    if (wins.length) tags.push(["field", `請假 ${leaveHours}h`]);
+  }
   if (sorted.some(p => p.mode === "field")) tags.push(["field", "外勤"]);
   if (sorted.some(p => p.mode === "correction")) tags.push(["gray", "含補打卡"]);
-  if (!tags.some(t => t[0] === "late" || t[0] === "warn")) tags.unshift(["ok", "正常"]);
-  return { firstIn, lastOut, tags };
+  if (!fullLeave && !tags.some(t => t[0] === "late" || t[0] === "warn")) tags.unshift(["ok", "正常"]);
+  return { firstIn, lastOut, tags, fullLeave, leaveHours, effStart, effEnd };
 }
 export function tagsHtml(tags) {
   return tags.map(([cls, text]) => `<span class="tag ${cls}">${esc(text)}</span>`).join(" ");
 }
 export const MODE_LABEL = { office: "內勤", field: "外勤", correction: "補打卡" };
 export const TYPE_LABEL = { in: "上班", out: "下班" };
+
+// ===== 日期字串工具（格式 YYYY-MM-DD）=====
+function parseD(s) { const [y, m, d] = s.split("-").map(Number); return { y, m, d }; }
+function fmtD(y, m, d) { return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`; }
+export function todayStr() { const p = twParts(new Date()); return `${p.year}-${p.month}-${p.day}`; }
+export function addDays(s, n) {
+  const { y, m, d } = parseD(s);
+  const t = new Date(Date.UTC(y, m - 1, d + n));
+  return fmtD(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate());
+}
+export function addMonths(s, n) {
+  const { y, m, d } = parseD(s);
+  const total = y * 12 + (m - 1) + n;
+  const ny = Math.floor(total / 12), nm = total % 12 + 1;
+  const dim = new Date(Date.UTC(ny, nm, 0)).getUTCDate();
+  return fmtD(ny, nm, Math.min(d, dim));
+}
+export function weekdayOf(s) { const { y, m, d } = parseD(s); return new Date(Date.UTC(y, m - 1, d)).getUTCDay(); }
+export function ymOfStr(s) { return Number(s.slice(0, 4) + s.slice(5, 7)); }
+export function fmtDateStr(s) { return `${s.slice(5, 7)}/${s.slice(8, 10)}（${WEEK[weekdayOf(s)]}）`; }
+
+// ===== 假日 =====
+// holidays：Map(日期 → 名稱)
+export function toHolidayMap(list) { return new Map((list || []).map(h => [h.date, h.name || "國定假日"])); }
+// 名稱含「補班」的日期視為上班日（例如週六補班）
+export function isMakeupDay(s, holidays) {
+  return !!(holidays && holidays.has(s) && String(holidays.get(s)).includes("補班"));
+}
+export function isOffDay(s, holidays) {
+  if (isMakeupDay(s, holidays)) return false;
+  const w = weekdayOf(s);
+  return w === 0 || w === 6 || !!(holidays && holidays.has(s));
+}
+export function offDayLabel(s, holidays) {
+  if (isMakeupDay(s, holidays)) return "";
+  if (holidays && holidays.has(s)) return holidays.get(s);
+  const w = weekdayOf(s);
+  return w === 0 || w === 6 ? "假日" : "";
+}
+
+// ===== 請假／加班 =====
+export const LEAVE_TYPES = [
+  { key: "annual", label: "特休" },
+  { key: "comp", label: "補休", note: "使用加班換得的補休時數" },
+  { key: "personal", label: "事假", note: "全年 14 日內，不給工資" },
+  { key: "family", label: "家庭照顧假", note: "全年 7 日，併入事假計算" },
+  { key: "sick", label: "病假", note: "未住院全年 30 日內，工資折半" },
+  { key: "menstrual", label: "生理假", note: "每月 1 日" },
+  { key: "marriage", label: "婚假", note: "8 日" },
+  { key: "funeral", label: "喪假", note: "依親等 3～8 日" },
+  { key: "official", label: "公假" },
+  { key: "injury", label: "公傷病假" },
+  { key: "maternity", label: "產假" },
+  { key: "paternity", label: "陪產檢及陪產假", note: "7 日" }
+];
+export const LEAVE_LABEL = Object.fromEntries(LEAVE_TYPES.map(t => [t.key, t.label]));
+export const STATUS_INFO = {
+  pending_supervisor: ["warn", "待主管審核"],
+  pending_admin: ["warn", "待管理員核准"],
+  approved: ["ok", "已核准"],
+  rejected: ["late", "已駁回"],
+  cancelled: ["gray", "已取消"]
+};
+export const ACTIVE_STATUS = ["pending_supervisor", "pending_admin", "approved"];
+export const OT_COMP_LABEL = { pay: "加班費", comp: "換補休" };
+export const OT_MONTH_LIMIT = 46;
+export const HOURS_PER_DAY = 8;
+
+// 一段時間內落在上班時段（08–12、13–17）的時數
+export function overlapWork(s, e) {
+  const o = (a, b) => Math.max(0, Math.min(e, b) - Math.max(s, a));
+  return o(8, 12) + o(13, 17);
+}
+// 把一張假單拆成每天的時段（跳過週末與國定假日）
+export function leaveDaySegments(r, holidays) {
+  const out = [];
+  if (!r.startDate || !r.endDate || r.endDate < r.startDate) return out;
+  let d = r.startDate;
+  for (let i = 0; d <= r.endDate && i < 400; i++, d = addDays(d, 1)) {
+    if (isOffDay(d, holidays)) continue;
+    const s = d === r.startDate ? r.startHour : 8;
+    const e = d === r.endDate ? r.endHour : 17;
+    const h = overlapWork(s, e);
+    if (h > 0) out.push({ date: d, s, e, hours: h });
+  }
+  return out;
+}
+export function calcLeaveHours(r, holidays) {
+  return leaveDaySegments(r, holidays).reduce((a, x) => a + x.hours, 0);
+}
+// 已核准假單 → { 日期: [時段…] }
+export function buildLeaveMap(leaves, holidays) {
+  const m = {};
+  for (const r of leaves) {
+    for (const seg of leaveDaySegments(r, holidays)) (m[seg.date] = m[seg.date] || []).push({ ...seg, type: r.leaveType });
+  }
+  return m;
+}
+export function calcOtHours(start, end) {
+  if (!start || !end) return 0;
+  return (toMin(end) - toMin(start)) / 60;
+}
+
+// 特休：依勞基法第 38 條，以到職日（週年制）計算目前這一年度的天數與期間
+export function annualEntitlement(hireDate, onDate) {
+  if (!hireDate) return null;
+  const sixMonths = addMonths(hireDate, 6);
+  if (onDate < sixMonths) return { start: null, end: sixMonths, days: 0 };
+  let k = 6;
+  while (k < 1200 && addMonths(hireDate, k + 1) <= onDate) k++;
+  if (k < 12) return { start: sixMonths, end: addMonths(hireDate, 12), days: 3 };
+  const y = Math.floor(k / 12);
+  const days = y === 1 ? 7 : y === 2 ? 10 : y <= 4 ? 14 : y <= 9 ? 15 : Math.min(30, 15 + (y - 9));
+  return { start: addMonths(hireDate, 12 * y), end: addMonths(hireDate, 12 * (y + 1)), days };
+}
+
+// 計算特休、補休餘額。reqs：該員工所有申請
+export function computeBalances(reqs, hireDate, today) {
+  const ent = annualEntitlement(hireDate, today);
+  const active = r => ACTIVE_STATUS.includes(r.status);
+  const sum = arr => arr.reduce((a, r) => a + (r.hours || 0), 0);
+  const annualTotal = ent ? ent.days * HOURS_PER_DAY : 0;
+  const annualUsed = ent && ent.start
+    ? sum(reqs.filter(r => r.kind === "leave" && r.leaveType === "annual" && active(r) && r.startDate >= ent.start && r.startDate < ent.end))
+    : 0;
+  const compEarned = sum(reqs.filter(r => r.kind === "overtime" && r.comp === "comp" && r.status === "approved"));
+  const compUsed = sum(reqs.filter(r => r.kind === "leave" && r.leaveType === "comp" && active(r)));
+  return {
+    ent, annualTotal, annualUsed, annualLeft: annualTotal - annualUsed,
+    compEarned, compUsed, compLeft: compEarned - compUsed
+  };
+}
+export function fmtHours(h) {
+  const n = Math.round(h * 10) / 10;
+  const neg = n < 0, v = Math.abs(n);
+  const d = Math.floor(v / HOURS_PER_DAY), r = Math.round((v - d * HOURS_PER_DAY) * 10) / 10;
+  const txt = d ? `${d} 天${r ? ` ${r} 小時` : ""}` : `${r} 小時`;
+  return (neg ? "-" : "") + txt;
+}
+function hh(n) { return `${String(n).padStart(2, "0")}:00`; }
+// 申請單的顯示文字
+export function reqTitle(r) {
+  return r.kind === "leave" ? LEAVE_LABEL[r.leaveType] || r.leaveType : `加班（${OT_COMP_LABEL[r.comp] || ""}）`;
+}
+export function reqWhen(r) {
+  if (r.kind === "leave") {
+    return r.startDate === r.endDate
+      ? `${fmtDateStr(r.startDate)} ${hh(r.startHour)}–${hh(r.endHour)}`
+      : `${fmtDateStr(r.startDate)} ${hh(r.startHour)} ～ ${fmtDateStr(r.endDate)} ${hh(r.endHour)}`;
+  }
+  return `${fmtDateStr(r.date)} ${r.startTime}–${r.endTime}`;
+}
+export function reqSortKey(r) { return (r.kind === "leave" ? r.startDate : r.date) || ""; }
+// 兩張請假單是否有時段重疊
+export function leaveOverlaps(a, b, holidays) {
+  const sa = leaveDaySegments(a, holidays), sb = leaveDaySegments(b, holidays);
+  return sa.some(x => sb.some(y => x.date === y.date && x.s < y.e && y.s < x.e));
+}
+
+// ===== 月出勤報表 =====
+// 輸入：ym（例如 202610）、staff、當月打卡、所有已核准假單、當月申請、假日、今天日期
+// 只統計到「昨天」，今天的資料還不完整
+const LEAVE_COLS = ["annual", "comp", "personal", "family", "sick", "menstrual", "other"];
+function minutesOf(d) { return toMin(fmtTime(d)); }
+function workMinutes(inD, outD) {
+  const a = minutesOf(inD), b = minutesOf(outD);
+  if (b <= a) return 0;
+  const lunch = Math.max(0, Math.min(b, 13 * 60) - Math.max(a, 12 * 60));
+  return b - a - lunch;
+}
+export function computeMonthReport({ ym, staff, punches, leaves, monthReqs, holidays, today, goLive = null }) {
+  const y = Math.floor(ym / 100), m = ym % 100;
+  const dim = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const monthStart = `${y}-${String(m).padStart(2, "0")}-01`;
+  const people = new Map(staff.map(s => [s.empId, { empId: s.empId, name: s.name, company: s.company, hireDate: s.hireDate || null }]));
+  for (const p of punches) if (!people.has(p.empId)) people.set(p.empId, { empId: p.empId, name: p.name, company: p.company, hireDate: null });
+
+  const punchBy = {};
+  for (const p of punches) {
+    const ds = ymdToInput(p.ymd);
+    ((punchBy[p.empId] = punchBy[p.empId] || {})[ds] = punchBy[p.empId][ds] || []).push(p);
+  }
+  const leaveBy = {};
+  for (const r of leaves) {
+    for (const seg of leaveDaySegments(r, holidays)) {
+      if (!seg.date.startsWith(monthStart.slice(0, 8))) continue;
+      ((leaveBy[r.empId] = leaveBy[r.empId] || {})[seg.date] = leaveBy[r.empId][seg.date] || []).push({ ...seg, type: r.leaveType });
+    }
+  }
+  const otBy = {};
+  for (const r of monthReqs) {
+    if (r.kind !== "overtime" || r.status !== "approved") continue;
+    const k = `${r.empId}|${r.date}`;
+    otBy[k] = (otBy[k] || 0) + r.hours;
+  }
+
+  const days = [], anomalies = [], summary = [];
+  let lastDate = null;
+  for (const person of [...people.values()].sort((a, b) => a.empId.localeCompare(b.empId))) {
+    const S = {
+      empId: person.empId, name: person.name, company: person.company,
+      workdays: 0, attended: 0, fullLeaveDays: 0, offDayWork: 0,
+      lateCount: 0, lateMin: 0, earlyCount: 0, earlyMin: 0,
+      missIn: 0, missOut: 0, absent: 0, field: 0, correction: 0, workHours: 0,
+      leave: Object.fromEntries(LEAVE_COLS.map(k => [k, 0])), otPay: 0, otComp: 0
+    };
+    for (let d = 1; d <= dim; d++) {
+      const ds = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      if (ds >= today) break;
+      lastDate = lastDate && lastDate > ds ? lastDate : ds;
+      const list = ((punchBy[person.empId] || {})[ds] || []).slice().sort((a, b) => a.ts - b.ts);
+      const wins = (leaveBy[person.empId] || {})[ds] || [];
+      const off = isOffDay(ds, holidays);
+      const beforeHire = (person.hireDate && ds < person.hireDate) || (goLive && ds < goLive);
+      if ((off || beforeHire) && !list.length) continue;
+
+      const sum = summarizeDay(list, off ? [] : wins);
+      const row = {
+        date: ds, weekday: WEEK[weekdayOf(ds)], empId: person.empId, name: person.name, company: person.company,
+        firstIn: sum.firstIn ? fmtTime(sum.firstIn.ts) : "", lastOut: sum.lastOut ? fmtTime(sum.lastOut.ts) : "",
+        workHours: 0, lateMin: 0, earlyMin: 0,
+        leave: wins.map(w => `${LEAVE_LABEL[w.type] || w.type} ${w.hours}h`).join("、"), leaveHours: sum.leaveHours,
+        overtime: otBy[`${person.empId}|${ds}`] || 0, status: "", issues: []
+      };
+      if (sum.firstIn && sum.lastOut) row.workHours = Math.round(workMinutes(sum.firstIn.ts, sum.lastOut.ts) / 60 * 100) / 100;
+      S.workHours += row.workHours;
+      if (list.some(p => p.mode === "field")) S.field++;
+      if (list.some(p => p.mode === "correction")) S.correction++;
+      for (const w of wins) S.leave[LEAVE_COLS.includes(w.type) ? w.type : "other"] += w.hours;
+
+      if (off) {
+        S.offDayWork++;
+        row.status = `${offDayLabel(ds, holidays)}出勤`;
+      } else {
+        S.workdays++;
+        if (sum.fullLeave) { S.fullLeaveDays++; row.status = "請假"; }
+        else if (!list.length) { S.absent++; row.status = "未打卡"; row.issues.push("整天未打卡"); }
+        else {
+          S.attended++;
+          if (!sum.firstIn) { S.missIn++; row.issues.push("未打上班卡"); }
+          if (!sum.lastOut) { S.missOut++; row.issues.push("未打下班卡"); }
+          if (sum.tags.some(t => t[1] === "遲到")) {
+            row.lateMin = minutesOf(sum.firstIn.ts) - sum.effStart * 60;
+            S.lateCount++; S.lateMin += row.lateMin; row.issues.push(`遲到 ${row.lateMin} 分`);
+          }
+          if (sum.tags.some(t => t[1] === "早退")) {
+            row.earlyMin = sum.effEnd * 60 - minutesOf(sum.lastOut.ts);
+            S.earlyCount++; S.earlyMin += row.earlyMin; row.issues.push(`早退 ${row.earlyMin} 分`);
+          }
+          row.status = row.issues.length ? row.issues.join("、") : "正常";
+          if (wins.length) row.status += `（請假 ${sum.leaveHours}h）`;
+        }
+      }
+      days.push(row);
+      if (row.issues.length) anomalies.push(row);
+    }
+    for (const r of monthReqs) {
+      if (r.empId !== person.empId || r.kind !== "overtime" || r.status !== "approved") continue;
+      r.comp === "comp" ? S.otComp += r.hours : S.otPay += r.hours;
+    }
+    S.workHours = Math.round(S.workHours * 100) / 100;
+    summary.push(S);
+  }
+  return { days, anomalies, summary, lastDate };
+}
+
+// 特休／補休餘額總覽（年度快結束還有剩餘的員工要特別注意）
+export function leaveBalanceOverview(staff, allReqs, today) {
+  return staff.map(s => {
+    const reqs = allReqs.filter(r => r.empId === s.empId);
+    const b = computeBalances(reqs, s.hireDate, today);
+    const daysLeft = b.ent && b.ent.start
+      ? Math.round((Date.parse(b.ent.end) - Date.parse(today)) / 86400000) : null;
+    return { empId: s.empId, name: s.name, company: s.company, hireDate: s.hireDate || "", ...b, daysLeft };
+  });
+}
 
 // ===== GPS =====
 export function getPosition() {
