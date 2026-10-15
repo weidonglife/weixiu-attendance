@@ -27,6 +27,8 @@
   color: var(--pn-text);
   border-radius: 14px;
   padding: 14px;
+  container-type: inline-size;
+  container-name: board;
   font-family: "Noto Sans TC", -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
 }
 .board .hidden { display: none !important; }
@@ -224,9 +226,20 @@
 .board.big .plate .pdt { font-size: 13px; }
 .board.big .rack-h { font-size: 17px; }
 
+/* ---- 中等寬度（例如打卡頁裡的看板、平板）：量尺與讀值移到時鐘下方 ---- */
+@container board (max-width: 1100px) {
+  .board .fp, .board.big .fp { grid-template-columns: auto 1fr; }
+  .board .vfd { justify-self: end; }
+  .board .fp-meter { grid-column: 1 / -1; }
+  .board .readouts { justify-content: stretch; flex-wrap: nowrap; }
+  .board .ro, .board.big .ro { flex: 1; min-width: 0; }
+}
+
 /* ---- 手機 ---- */
 @media (max-width: 720px) {
   .board { padding: 10px; border-radius: 12px; }
+}
+@container board (max-width: 600px) {
   .board .fp, .board.big .fp { grid-template-columns: 1fr; gap: 10px; padding: 12px 12px 14px; }
   .board .vfd { justify-self: start; }
   .board .fp-mark { height: 32px; }
