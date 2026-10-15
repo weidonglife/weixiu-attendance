@@ -36,7 +36,7 @@
 /* ---- 面板頂部 ---- */
 .board .fp {
   display: grid; gap: 14px; align-items: center;
-  grid-template-columns: auto auto 1fr;
+  grid-template-columns: auto 1fr;
   padding: 14px 16px 16px;
   background: linear-gradient(180deg, #0f3349, #0a2638);
   border: 1px solid var(--pn-edge); border-radius: 12px;
@@ -64,9 +64,11 @@
   text-shadow: 0 0 6px rgba(73,203,255,.65), 0 0 18px rgba(0,148,217,.35);
 }
 
-.board .fp-meter { min-width: 0; }
-.board .readouts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; margin-top: 10px; }
-.board .ro { background: #06192a; border: 1px solid #143a52; border-radius: 8px; padding: 5px 10px 6px; min-width: 76px; }
+.board .vfd { justify-self: end; }
+/* 量尺與讀值固定在時鐘下方（所有寬度） */
+.board .fp-meter { min-width: 0; grid-column: 1 / -1; }
+.board .readouts { display: flex; gap: 6px; flex-wrap: nowrap; justify-content: stretch; margin-top: 10px; }
+.board .ro { background: #06192a; border: 1px solid #143a52; border-radius: 8px; padding: 5px 10px 6px; flex: 1; min-width: 0; }
 .board .ro-l { font-size: 12px; color: var(--pn-mute); }
 .board .ro-v { display: flex; align-items: baseline; gap: 2px; }
 .board .seg7 { font-family: "DSEG7", ui-monospace, monospace; font-weight: 700; font-size: 24px; line-height: 1.1; }
@@ -218,22 +220,13 @@
 .board.big .vfd { font-size: 54px; padding: 10px 18px; }
 .board.big .vfd .val { left: 18px; top: 10px; }
 .board.big .seg7 { font-size: 34px; }
-.board.big .ro { min-width: 100px; padding: 6px 14px 8px; }
+.board.big .ro { padding: 6px 14px 8px; }
 .board.big .ro-l { font-size: 14px; }
 .board.big .plates { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .board.big .plate .pn { font-size: 27px; }
 .board.big .plate .pst { font-size: 15px; }
 .board.big .plate .pdt { font-size: 13px; }
 .board.big .rack-h { font-size: 17px; }
-
-/* ---- 中等寬度（例如打卡頁裡的看板、平板）：量尺與讀值移到時鐘下方 ---- */
-@container board (max-width: 1100px) {
-  .board .fp, .board.big .fp { grid-template-columns: auto 1fr; }
-  .board .vfd { justify-self: end; }
-  .board .fp-meter { grid-column: 1 / -1; }
-  .board .readouts { justify-content: stretch; flex-wrap: nowrap; }
-  .board .ro, .board.big .ro { flex: 1; min-width: 0; }
-}
 
 /* ---- 手機 ---- */
 @media (max-width: 720px) {
