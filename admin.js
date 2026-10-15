@@ -7,7 +7,7 @@ import {
   LEAVE_LABEL, STATUS_INFO, reqTitle, reqWhen, reqSortKey,
   computeMonthReport, leaveBalanceOverview, fmtTimeSec, OT_COMP_LABEL,
   isPart, EMP_TYPE_LABEL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY
-} from "./common.js?v=8";
+} from "./common.js?v=9";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut
@@ -81,6 +81,16 @@ async function loadHolidays() {
   const list = snap.exists() ? snap.data().list || [] : [];
   holidays = toHolidayMap(list);
   $("holText").value = list.map(h => `${h.date} ${h.name || ""}`.trim()).join("\n");
+  holYearHint(list);
+}
+// 今年或明年（10 月起）還沒設定假日時，提醒管理員匯入
+function holYearHint(list) {
+  const t = todayStr(), y = Number(t.slice(0, 4));
+  const want = [y].concat(Number(t.slice(5, 7)) >= 10 ? [y + 1] : []);
+  const missing = want.filter(yy => !list.some(h => h.date.startsWith(yy + "-")));
+  if (!$("holYear").value) $("holYear").value = missing[0] || y;
+  $("holHint").classList.toggle("hidden", !missing.length);
+  $("holHint").textContent = missing.length ? `還沒有設定 ${missing.join("、")} 年的國定假日，請選年度後按「從政府行事曆自動匯入」。` : "";
 }
 async function loadApprovedLeaves() {
   const snap = await getDocs(query(collection(db, "requests"), where("status", "==", "approved")));
@@ -734,6 +744,40 @@ $("recList").onclick = async e => {
 };
 
 // ===== 國定假日 =====
+// 資料來源：行政院人事行政總處「政府行政機關辦公日曆表」，由開源專案 ruyut/TaiwanCalendar 整理成 JSON 放在 GitHub
+const HOL_SRC = y => `https://raw.githubusercontent.com/ruyut/TaiwanCalendar/master/data/${y}.json`;
+$("btnImportHol").onclick = async () => {
+  const msg = $("holMsg");
+  const y = Number($("holYear").value);
+  if (!(y >= 2020 && y <= 2100)) { showMsg(msg, "請輸入正確的年度", "err"); return; }
+  $("btnImportHol").disabled = true;
+  showMsg(msg, `正在讀取 ${y} 年政府行事曆…`, "info");
+  try {
+    const res = await fetch(HOL_SRC(y), { cache: "no-store" });
+    if (res.status === 404) throw new Error(`政府還沒公告 ${y} 年的行事曆（通常在前一年 6 月左右公告），請晚點再試`);
+    if (!res.ok) throw new Error(`讀取失敗（${res.status}），請稍後再試`);
+    const days = await res.json();
+    if (!Array.isArray(days) || !days.length) throw new Error("資料格式不正確，請改用手動輸入");
+    const add = [];
+    for (const d of days) {
+      if (!/^\d{8}$/.test(d.date || "")) continue;
+      const ds = `${d.date.slice(0, 4)}-${d.date.slice(4, 6)}-${d.date.slice(6, 8)}`;
+      const weekend = d.week === "六" || d.week === "日";
+      if (d.isHoliday && !weekend) add.push({ date: ds, name: d.description || "放假" });
+      else if (!d.isHoliday && weekend) add.push({ date: ds, name: d.description ? `補班（${d.description}）` : "補班" });
+    }
+    // 保留其他年度，以及這個年度自己加的公司假日（例如公司旅遊）；同一天以政府資料為準
+    const lines = $("holText").value.split("\n").map(l => l.trim()).filter(Boolean);
+    const keep = lines.filter(l => !add.some(a => l.startsWith(a.date)));
+    const all = keep.concat(add.map(a => `${a.date} ${a.name}`)).sort();
+    $("holText").value = all.join("\n");
+    const mk = add.filter(a => a.name.includes("補班")).length;
+    showMsg(msg, `已帶入 ${y} 年：平日放假 ${add.length - mk} 天${mk ? `、補班 ${mk} 天` : ""}。請檢查下面的清單，沒問題就按「儲存」。`, "ok");
+  } catch (e) {
+    showMsg(msg, e instanceof TypeError ? "無法連線到政府行事曆資料，請檢查網路，或改用手動輸入。" : (e.message || String(e)), "err");
+  }
+  $("btnImportHol").disabled = false;
+};
 $("btnSaveHol").onclick = async () => {
   const msg = $("holMsg");
   const lines = $("holText").value.split("\n").map(l => l.trim()).filter(Boolean);
@@ -749,6 +793,7 @@ $("btnSaveHol").onclick = async () => {
     holidays = toHolidayMap(list);
     $("holText").value = list.map(h => `${h.date} ${h.name}`).join("\n");
     showMsg(msg, `已儲存 ${list.length} 個國定假日`, "ok");
+    holYearHint(list);
     loadDay();
   } catch (e) { showMsg(msg, errMsg(e), "err"); }
 };

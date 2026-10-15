@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <header class="top">
@@ -252,8 +252,14 @@
     <section id="tHol" class="card hidden">
       <h2>國定假日設定</h2>
       <p class="muted">每行一天，格式：<code>2026-12-25 行憲紀念日</code>。設定後，請假時數會自動扣除這些日子，出勤表也不會把這些日子算成未打卡。週六、週日已自動視為假日，不用填。<br>
-        <b>補班日</b>：名稱寫「補班」即可，例如 <code>2027-02-20 補班</code>，那天就會當成一般上班日。</p>
-      <textarea id="holText" style="min-height:220px;font-family:monospace"></textarea>
+        <b>補班日</b>：名稱寫「補班」即可，例如 <code>2027-02-20 補班</code>，那天就會當成一般上班日。<br>
+        <b>自動匯入</b>：選年度後按「從政府行事曆自動匯入」，會帶入行政院人事行政總處公告的放假日與補班日（只帶入平日放假和週末補班）。匯入後請檢查一下，再按「儲存」。</p>
+      <div class="row" style="align-items:flex-end;margin-bottom:10px">
+        <div style="max-width:140px"><label for="holYear">年度</label><input id="holYear" type="number" min="2020" max="2100"></div>
+        <div><button id="btnImportHol" class="secondary" type="button">從政府行事曆自動匯入</button></div>
+      </div>
+      <div id="holHint" class="warnbox hidden"></div>
+      <textarea id="holText" style="min-height:220px;font-family:monospace;margin-top:10px"></textarea>
       <button id="btnSaveHol" style="margin-top:12px">儲存</button>
       <div id="holMsg" class="msg hidden"></div>
     </section>
@@ -279,6 +285,6 @@
   </div>
 </div>
 
-<script type="module" src="admin.js?v=8"></script>
+<script type="module" src="admin.js?v=9"></script>
 </body>
 </html>
