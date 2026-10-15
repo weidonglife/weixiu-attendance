@@ -25,6 +25,10 @@ export const db = getFirestore(app);
 export const COMPANIES = { W: "唯修科技", S: "唯校中心", C: "傳創機電" };
 export const WORK = { start: "08:00", lateAfter: "08:10", end: "17:00" };
 export const DEFAULT_RADIUS = 200; // 公尺
+// 員工身分：full 正職、part 兼職（時間不固定，只記工時）。舊資料沒有這個欄位＝正職
+export const EMP_TYPE_LABEL = { full: "正職", part: "兼職" };
+export function isPart(u) { return !!u && u.empType === "part"; }
+export const FULLTIME_YEAR_HOURS = 2080; // 正職一年的正常工時（每週 40 小時 × 52 週），兼職特休按比例試算用
 const EMAIL_DOMAIN = "staff.weixiu-attendance.app"; // 內部用的虛擬信箱網域，不會寄信
 
 export function normEmpId(s) { return (s || "").trim().toUpperCase(); }
@@ -85,7 +89,8 @@ export function daysInYm(ym) { const y = Math.floor(ym / 100), m = ym % 100; ret
 // 請假會把「應上班時間」往後推、「應下班時間」往前移，避免請假時段被判成遲到或早退
 const GRACE_MIN = 10;
 function toMin(hhmm) { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; }
-export function summarizeDay(list, wins = []) {
+// part = true：兼職（時間不固定），不判斷遲到、早退
+export function summarizeDay(list, wins = [], part = false) {
   const sorted = [...list].sort((a, b) => a.ts - b.ts);
   const ins = sorted.filter(p => p.type === "in");
   const outs = sorted.filter(p => p.type === "out");
@@ -106,7 +111,11 @@ export function summarizeDay(list, wins = []) {
   const leaveHours = wins.reduce((a, w) => a + w.hours, 0);
 
   const tags = [];
-  if (fullLeave) {
+  if (part) {
+    if (list.length && !firstIn) tags.push(["warn", "未打上班卡"]);
+    if (list.length && !lastOut) tags.push(["warn", "未打下班卡"]);
+    if (wins.length) tags.push(["field", `請假 ${leaveHours}h`]);
+  } else if (fullLeave) {
     tags.push(["field", "請假"]);
   } else {
     if (!firstIn) tags.push(["warn", "未打上班卡"]);
@@ -117,7 +126,7 @@ export function summarizeDay(list, wins = []) {
   }
   if (sorted.some(p => p.mode === "field")) tags.push(["field", "外勤"]);
   if (sorted.some(p => p.mode === "correction")) tags.push(["gray", "含補打卡"]);
-  if (!fullLeave && !tags.some(t => t[0] === "late" || t[0] === "warn")) tags.unshift(["ok", "正常"]);
+  if ((part ? list.length > 0 : !fullLeave) && !tags.some(t => t[0] === "late" || t[0] === "warn")) tags.unshift(["ok", "正常"]);
   return { firstIn, lastOut, tags, fullLeave, leaveHours, effStart, effEnd };
 }
 export function tagsHtml(tags) {
@@ -242,18 +251,20 @@ export function annualEntitlement(hireDate, onDate) {
 }
 
 // 計算特休、補休餘額。reqs：該員工所有申請
-export function computeBalances(reqs, hireDate, today) {
+// 兼職：特休時數由管理員依比例設定（partAnnualHours），不套用正職天數
+export function computeBalances(reqs, hireDate, today, emp = null) {
   const ent = annualEntitlement(hireDate, today);
+  const part = isPart(emp);
   const active = r => ACTIVE_STATUS.includes(r.status);
   const sum = arr => arr.reduce((a, r) => a + (r.hours || 0), 0);
-  const annualTotal = ent ? ent.days * HOURS_PER_DAY : 0;
+  const annualTotal = !ent ? 0 : part ? (ent.start ? Number(emp.partAnnualHours) || 0 : 0) : ent.days * HOURS_PER_DAY;
   const annualUsed = ent && ent.start
     ? sum(reqs.filter(r => r.kind === "leave" && r.leaveType === "annual" && active(r) && r.startDate >= ent.start && r.startDate < ent.end))
     : 0;
   const compEarned = sum(reqs.filter(r => r.kind === "overtime" && r.comp === "comp" && r.status === "approved"));
   const compUsed = sum(reqs.filter(r => r.kind === "leave" && r.leaveType === "comp" && active(r)));
   return {
-    ent, annualTotal, annualUsed, annualLeft: annualTotal - annualUsed,
+    ent, part, annualTotal, annualUsed, annualLeft: annualTotal - annualUsed,
     compEarned, compUsed, compLeft: compEarned - compUsed
   };
 }
@@ -289,7 +300,7 @@ export function leaveOverlaps(a, b, holidays) {
 // 只統計到「昨天」，今天的資料還不完整
 const LEAVE_COLS = ["annual", "comp", "personal", "family", "sick", "menstrual", "other"];
 function minutesOf(d) { return toMin(fmtTime(d)); }
-function workMinutes(inD, outD) {
+export function workMinutes(inD, outD) {
   const a = minutesOf(inD), b = minutesOf(outD);
   if (b <= a) return 0;
   const lunch = Math.max(0, Math.min(b, 13 * 60) - Math.max(a, 12 * 60));
@@ -299,7 +310,7 @@ export function computeMonthReport({ ym, staff, punches, leaves, monthReqs, holi
   const y = Math.floor(ym / 100), m = ym % 100;
   const dim = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const monthStart = `${y}-${String(m).padStart(2, "0")}-01`;
-  const people = new Map(staff.map(s => [s.empId, { empId: s.empId, name: s.name, company: s.company, hireDate: s.hireDate || null }]));
+  const people = new Map(staff.map(s => [s.empId, { empId: s.empId, name: s.name, company: s.company, hireDate: s.hireDate || null, part: isPart(s) }]));
   for (const p of punches) if (!people.has(p.empId)) people.set(p.empId, { empId: p.empId, name: p.name, company: p.company, hireDate: null });
 
   const punchBy = {};
@@ -325,7 +336,7 @@ export function computeMonthReport({ ym, staff, punches, leaves, monthReqs, holi
   let lastDate = null;
   for (const person of [...people.values()].sort((a, b) => a.empId.localeCompare(b.empId))) {
     const S = {
-      empId: person.empId, name: person.name, company: person.company,
+      empId: person.empId, name: person.name, company: person.company, part: !!person.part,
       workdays: 0, attended: 0, fullLeaveDays: 0, offDayWork: 0,
       lateCount: 0, lateMin: 0, earlyCount: 0, earlyMin: 0,
       missIn: 0, missOut: 0, absent: 0, field: 0, correction: 0, workHours: 0,
@@ -340,8 +351,9 @@ export function computeMonthReport({ ym, staff, punches, leaves, monthReqs, holi
       const off = isOffDay(ds, holidays);
       const beforeHire = (person.hireDate && ds < person.hireDate) || (goLive && ds < goLive);
       if ((off || beforeHire) && !list.length) continue;
+      if (person.part && !list.length && !wins.length) continue; // 兼職沒來上班的日子不列入
 
-      const sum = summarizeDay(list, off ? [] : wins);
+      const sum = summarizeDay(list, off ? [] : wins, person.part);
       const row = {
         date: ds, weekday: WEEK[weekdayOf(ds)], empId: person.empId, name: person.name, company: person.company,
         firstIn: sum.firstIn ? fmtTime(sum.firstIn.ts) : "", lastOut: sum.lastOut ? fmtTime(sum.lastOut.ts) : "",
@@ -361,6 +373,7 @@ export function computeMonthReport({ ym, staff, punches, leaves, monthReqs, holi
       } else {
         S.workdays++;
         if (sum.fullLeave) { S.fullLeaveDays++; row.status = "請假"; }
+        else if (!list.length && person.part) { row.status = `請假 ${sum.leaveHours}h`; }
         else if (!list.length) { S.absent++; row.status = "未打卡"; row.issues.push("整天未打卡"); }
         else {
           S.attended++;
@@ -395,7 +408,7 @@ export function computeMonthReport({ ym, staff, punches, leaves, monthReqs, holi
 export function leaveBalanceOverview(staff, allReqs, today) {
   return staff.map(s => {
     const reqs = allReqs.filter(r => r.empId === s.empId);
-    const b = computeBalances(reqs, s.hireDate, today);
+    const b = computeBalances(reqs, s.hireDate, today, s);
     const daysLeft = b.ent && b.ent.start
       ? Math.round((Date.parse(b.ent.end) - Date.parse(today)) / 86400000) : null;
     return { empId: s.empId, name: s.name, company: s.company, hireDate: s.hireDate || "", ...b, daysLeft };

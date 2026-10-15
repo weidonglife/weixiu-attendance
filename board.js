@@ -3,7 +3,7 @@
 import {
   db, fmtTime, fmtTimeSec, fmtDateLong, todayStr, ymdOf, toHolidayMap, offDayLabel,
   leaveDaySegments, summarizeDay, esc, COMPANIES
-} from "./common.js";
+} from "./common.js?v=8";
 import {
   collection, query, where, onSnapshot, doc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -125,10 +125,11 @@ export function startBoard(root, { big = false } = {}) {
     }
     const inAt = pr && pr.inAt ? pr.inAt.toDate() : null;
     const outAt = pr && pr.outAt ? pr.outAt.toDate() : null;
-    const sum = summarizeDay(inAt ? [{ type: "in", ts: inAt }] : [], workday ? wins : []);
+    const part = p.empType === "part";
+    const sum = summarizeDay(inAt ? [{ type: "in", ts: inAt }] : [], workday ? wins : [], part);
     const leaveTxt = wins.length ? (sum.fullLeave ? "全天" : wins.map(w => `${hh(w.s)}–${hh(w.e)}`).join("、")) : "";
     const toMin = d => { const [h, m] = fmtTime(d).split(":").map(Number); return h * 60 + m; };
-    const late = !!(workday && inAt && toMin(inAt) > sum.effStart * 60 + GRACE);
+    const late = !!(!part && workday && inAt && toMin(inAt) > sum.effStart * 60 + GRACE);
     let st, sub = "", tags = [];
     if (pr && pr.lastType === "out" && outAt) {
       st = "off"; sub = `${inAt ? fmtTime(inAt) + " 上班・" : ""}${fmtTime(outAt)} 下班`;
@@ -137,6 +138,9 @@ export function startBoard(root, { big = false } = {}) {
       sub = st === "field" ? `${esc(pr.customer || "外勤")}・${inAt ? fmtTime(inAt) : ""}` : `${inAt ? fmtTime(inAt) : ""} 上班`;
     } else if (wins.length && workday) {
       st = "leave"; sub = `請假 ${leaveTxt}`;
+    } else if (part) {
+      // 兼職時間不固定：沒打卡＝今天沒來，不算未到
+      return { st: "none", sub: "今日未上班", tags: [], overdue: false, idle: true };
     } else {
       st = "none";
       const shouldBe = sum.effStart * 60 + GRACE;
@@ -163,19 +167,21 @@ export function startBoard(root, { big = false } = {}) {
 
     const people = directory.filter(p => !filter || p.company === filter);
     const groups = { in: [], field: [], leave: [], none: [], off: [] };
+    let idle = 0;
     for (const p of people) {
       const s = statusOf(p, nowMin, workday);
-      if (!workday && s.st === "none") continue;
+      if ((!workday || s.idle) && s.st === "none") { if (s.idle) idle++; continue; }
       groups[s.st].push({ p, s });
     }
+    const counted = people.length - idle; // 兼職今天沒來的不列入應到人數
     const arrived = groups.in.length + groups.field.length + groups.off.length;
     const overdue = groups.none.filter(x => x.s.overdue).length;
     const readout = (n, label, cls, of) => `<div class="ro ${cls}"><div class="ro-l">${label}</div>
       <div class="ro-v"><span class="seg7">${n}</span>${of != null ? `<span class="ro-of">/${of}</span>` : ""}</div></div>`;
-    $r("stats").innerHTML = readout(arrived, "已到", "c-in", workday ? people.length : null)
+    $r("stats").innerHTML = readout(arrived, "已到", "c-in", workday ? counted : null)
       + readout(groups.field.length, "外勤", "c-field")
       + (workday ? readout(groups.leave.length, "請假", "c-leave") + readout(overdue, "未到", overdue ? "c-late" : "c-zero") : "");
-    renderGauge(groups, people.length, workday, overdue);
+    renderGauge(groups, counted, workday, overdue);
 
     if (view === "plates") {
       renderPlates(people, nowMin, workday);
@@ -236,8 +242,8 @@ export function startBoard(root, { big = false } = {}) {
         <h3 class="rack-h"><span class="co ${COMPANY_CLASS[co] || ""}"></span>${esc(co)}<span class="rack-n">${list.length} 人</span><span class="rule" aria-hidden="true"></span></h3>
         <div class="plates">${list.map(p => {
           const s = statusOf(p, nowMin, workday);
-          const cls = s.overdue ? "late" : (!workday && s.st === "none" ? "rest" : s.st);
-          const label = s.overdue ? "未到" : (!workday && s.st === "none" ? "休假日" : PLATE_LABEL[s.st]);
+          const cls = s.overdue ? "late" : ((!workday || s.idle) && s.st === "none" ? "rest" : s.st);
+          const label = s.overdue ? "未到" : (s.idle ? "未上班" : !workday && s.st === "none" ? "休假日" : PLATE_LABEL[s.st]);
           const changed = prevStatus[p.empId] && prevStatus[p.empId] !== s.st;
           prevStatus[p.empId] = s.st;
           const pr = presence[p.empId] || {};
@@ -249,13 +255,14 @@ export function startBoard(root, { big = false } = {}) {
           if (s.st === "in") detail = tIn + (leaveTag ? `　${leaveTag[1]}` : "");
           else if (s.st === "field") detail = `${esc(pr.customer || "")}${tIn ? "　" + tIn : ""}`;
           else if (s.st === "off") detail = `${tIn}–${tOut}`;
+          else if (s.idle) detail = "時間不固定";
           else if (s.st === "leave") detail = s.sub.replace(/^請假\s*/, "");
           else if (s.sub.includes("請假")) detail = s.sub.replace(/^(未到|尚未打卡)/, "").replace(/[（）]/g, "");
           return `<div class="plate p-${cls}${late ? " is-late" : ""}${changed ? " pop" : ""}" title="${esc(p.name)} ${label}">
             <span class="co ${COMPANY_CLASS[co] || ""}" aria-hidden="true"></span>
             <span class="led" aria-hidden="true"></span>
             <div class="pn">${esc(p.name)}</div>
-            <div class="pid">${esc(p.empId)}</div>
+            <div class="pid">${esc(p.empId)}${p.empType === "part" ? "・兼職" : ""}</div>
             <div class="pst">${label}${late ? `<em>遲到</em>` : ""}</div>
             <div class="pdt">${detail || "&nbsp;"}</div>
           </div>`;

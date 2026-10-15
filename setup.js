@@ -1,7 +1,7 @@
 // 初始設定：建立第一位管理員（只能使用一次）
 import {
   auth, db, normEmpId, validEmpId, companyOf, makeEmail, errMsg, showMsg, checkNewPassword
-} from "./common.js";
+} from "./common.js?v=8";
 import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { doc, getDoc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 

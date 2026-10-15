@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 <header class="top">
@@ -81,7 +81,7 @@
         <div class="table-scroll">
           <table>
             <thead><tr>
-              <th>員工</th><th>應出勤</th><th>出勤</th><th>全天請假</th><th>未打卡</th>
+              <th>員工</th><th>應出勤</th><th>出勤</th><th>工時</th><th>全天請假</th><th>未打卡</th>
               <th>遲到</th><th>早退</th><th>漏打卡</th><th>特休</th><th>病假</th><th>事假</th><th>其他假</th><th>加班</th>
             </tr></thead>
             <tbody id="rptSum"></tbody>
@@ -142,6 +142,10 @@
         <div class="row">
           <div><label for="nHire">到職日（計算特休用）</label><input id="nHire" type="date"></div>
           <div><label for="nSup">直屬主管（第一關審核）</label><select id="nSup"></select></div>
+          <div>
+            <label for="nType">身分</label>
+            <select id="nType"><option value="full">正職</option><option value="part">兼職（時間不固定）</option></select>
+          </div>
         </div>
         <p class="muted">編號開頭：W = 唯修科技、S = 唯校中心、C = 傳創機電。員工第一次登入時會被要求改密碼。</p>
         <button id="btnAdd">新增員工</button>
@@ -152,7 +156,7 @@
         <h2>員工列表</h2>
         <div class="table-scroll">
           <table>
-            <thead><tr><th>編號</th><th>姓名</th><th>公司</th><th>權限</th><th>到職日</th><th>直屬主管</th><th>手機綁定</th><th>操作</th></tr></thead>
+            <thead><tr><th>編號</th><th>姓名</th><th>公司</th><th>權限</th><th>身分</th><th>到職日</th><th>直屬主管</th><th>手機綁定</th><th>操作</th></tr></thead>
             <tbody id="staffBody"></tbody>
           </table>
         </div>
@@ -173,6 +177,17 @@
         <div class="row">
           <div><label for="eHire">到職日</label><input id="eHire" type="date"></div>
           <div><label for="eSup">直屬主管</label><select id="eSup"></select></div>
+          <div>
+            <label for="eType">身分</label>
+            <select id="eType"><option value="full">正職</option><option value="part">兼職（時間不固定）</option></select>
+          </div>
+        </div>
+        <div id="ePartBox" class="hidden" style="margin-top:10px">
+          <div class="row" style="align-items:flex-end">
+            <div><label for="ePartAnnual">本年度特休時數（兼職按比例）</label><input id="ePartAnnual" type="number" min="0" step="0.5" placeholder="例如 24"></div>
+            <div><button id="btnPartCalc" class="secondary" type="button">依過去一年工時試算</button></div>
+          </div>
+          <p id="ePartCalc" class="muted" style="margin:6px 0 0">兼職特休＝同年資正職的特休時數 ×（過去一年實際工時 ÷ 2080 小時）。可以先按「試算」，再自行調整。</p>
         </div>
         <button id="btnEdit" style="margin-top:12px">儲存變更</button>
         <div id="eMsg" class="msg hidden"></div>
@@ -264,6 +279,6 @@
   </div>
 </div>
 
-<script type="module" src="admin.js"></script>
+<script type="module" src="admin.js?v=8"></script>
 </body>
 </html>

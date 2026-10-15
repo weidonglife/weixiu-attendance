@@ -5,8 +5,9 @@ import {
   getPosition, DEFAULT_RADIUS, esc, errMsg, showMsg, hideMsg,
   todayStr, toHolidayMap, isOffDay, offDayLabel, buildLeaveMap, computeBalances, fmtHours,
   LEAVE_LABEL, STATUS_INFO, reqTitle, reqWhen, reqSortKey,
-  computeMonthReport, leaveBalanceOverview, fmtTimeSec, OT_COMP_LABEL
-} from "./common.js";
+  computeMonthReport, leaveBalanceOverview, fmtTimeSec, OT_COMP_LABEL,
+  isPart, EMP_TYPE_LABEL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY
+} from "./common.js?v=8";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut
@@ -107,7 +108,7 @@ async function syncLeaveBoard() {
 
 // 看板用的員工名單（只有編號、姓名、公司）
 async function syncDirectory() {
-  const list = staff.map(s => ({ empId: s.empId, name: s.name, company: s.company }));
+  const list = staff.map(s => ({ empId: s.empId, name: s.name, company: s.company, ...(isPart(s) ? { empType: "part" } : {}) }));
   const cur = await getDoc(doc(db, "settings", "directory"));
   if (cur.exists() && JSON.stringify(cur.data().list) === JSON.stringify(list)) return;
   await setDoc(doc(db, "settings", "directory"), { list, updatedAt: serverTimestamp() });
@@ -140,10 +141,11 @@ async function loadDay() {
       const list = (byEmp[s.empId] || []).sort((a, b) => a.ts - b.ts);
       const wins = leaveByEmp[s.empId] || [];
       const leaveTxt = wins.length ? `<br><span class="muted">${wins.map(w => `${esc(LEAVE_LABEL[w.type] || w.type)} ${w.hours}h`).join("、")}</span>` : "";
-      const nameCell = `<td>${esc(s.name)}<br><span class="muted">${esc(s.empId)}</span></td><td>${esc(s.company)}</td>`;
+      const nameCell = `<td>${esc(s.name)}${isPart(s) ? ' <span class="tag gray">兼職</span>' : ""}<br><span class="muted">${esc(s.empId)}</span></td><td>${esc(s.company)}</td>`;
       if (!list.length) {
         let tags;
         if (off) tags = [["gray", off]];
+        else if (isPart(s) && !wins.length) tags = [["gray", "兼職・未上班"]];
         else {
           const sum = summarizeDay([], wins);
           if (sum.fullLeave) tags = sum.tags;
@@ -151,7 +153,7 @@ async function loadDay() {
         }
         return `<tr>${nameCell}<td>—</td><td>—</td><td>${tagsHtml(tags)}</td><td>${leaveTxt}</td></tr>`;
       }
-      const sum = summarizeDay(list, wins);
+      const sum = summarizeDay(list, wins, isPart(s));
       let tags = isToday ? sum.tags.filter(t => t[1] !== "未打下班卡" && t[1] !== "早退") : sum.tags;
       if (off) tags = [["gray", off]].concat(tags.filter(t => !["未打上班卡", "未打下班卡", "遲到", "早退", "正常"].includes(t[1])));
       const detail = list.map(p => {
@@ -175,7 +177,7 @@ $("btnRpt").onclick = async () => { await loadApprovedLeaves(); loadReport(); };
 const num = v => v ? v : '<span class="muted">0</span>';
 async function loadReport() {
   const body = $("rptSum");
-  body.innerHTML = `<tr><td colspan="13" class="muted">計算中…</td></tr>`;
+  body.innerHTML = `<tr><td colspan="14" class="muted">計算中…</td></tr>`;
   hideMsg($("rptMsg"));
   try {
     const ym = Number($("rptMonth").value.replace("-", ""));
@@ -193,18 +195,18 @@ async function loadReport() {
     lastReport = { ym, R, punches, monthReqs, bal };
 
     $("rptNote").textContent = (R.lastDate ? `統計期間：${String(ym).slice(0, 4)}-${String(ym).slice(4)}-01 ～ ${R.lastDate}（今天的資料還不完整，不列入）。` : "這個月還沒有可以統計的日子。")
-      + "遲到以 08:10 後打卡計，遲到分鐘數從 08:00 起算；請假時段不算遲到或早退。";
+      + "遲到以 08:10 後打卡計，遲到分鐘數從 08:00 起算；請假時段不算遲到或早退。工時＝上班到下班，扣掉 12:00–13:00 午休。兼職不算遲到早退，只統計有來的日子。";
     body.innerHTML = R.summary.map(s => {
       const other = s.leave.comp + s.leave.family + s.leave.menstrual + s.leave.other;
       const bad = s.lateCount + s.earlyCount + s.missIn + s.missOut + s.absent > 0;
-      return `<tr class="${bad ? "hl" : ""}"><td>${esc(s.name)}<br><span class="muted">${esc(s.empId)}</span></td>
-        <td>${s.workdays}</td><td>${s.attended}</td><td>${num(s.fullLeaveDays)}</td><td>${num(s.absent)}</td>
+      return `<tr class="${bad ? "hl" : ""}"><td>${esc(s.name)}${s.part ? ' <span class="tag gray">兼職</span>' : ""}<br><span class="muted">${esc(s.empId)}</span></td>
+        <td>${s.part ? '<span class="muted">—</span>' : s.workdays}</td><td>${s.attended}</td><td>${s.workHours ? `<b>${s.workHours}</b> h` : num(0)}</td><td>${num(s.fullLeaveDays)}</td><td>${num(s.absent)}</td>
         <td>${s.lateCount ? `${s.lateCount} 次<br><span class="muted">${s.lateMin} 分</span>` : num(0)}</td>
         <td>${s.earlyCount ? `${s.earlyCount} 次<br><span class="muted">${s.earlyMin} 分</span>` : num(0)}</td>
         <td>${num(s.missIn + s.missOut)}</td>
         <td>${num(s.leave.annual)}</td><td>${num(s.leave.sick)}</td><td>${num(s.leave.personal)}</td><td>${num(other)}</td>
         <td>${num(s.otPay + s.otComp)}</td></tr>`;
-    }).join("") || `<tr><td colspan="13" class="muted">沒有資料</td></tr>`;
+    }).join("") || `<tr><td colspan="14" class="muted">沒有資料</td></tr>`;
 
     $("anoCount").textContent = R.anomalies.length ? `（${R.anomalies.length} 筆）` : "";
     $("anoBody").innerHTML = R.anomalies.map(a => `<tr>
@@ -217,11 +219,11 @@ async function loadReport() {
       const period = !b.hireDate ? '<span class="tag warn">未設定到職日</span>'
         : !b.ent.start ? `${esc(b.ent.end)} 起可休` : `${esc(b.ent.start)} ～ ${esc(b.ent.end)}${b.daysLeft != null ? `<br><span class="muted">剩 ${b.daysLeft} 天結束</span>` : ""}`;
       return `<tr class="${warn ? "hl" : ""}"><td>${esc(b.name)}<br><span class="muted">${esc(b.empId)}</span></td>
-        <td>${esc(b.hireDate || "—")}</td><td>${period}</td><td>${b.ent ? b.ent.days + " 天" : "—"}</td>
+        <td>${esc(b.hireDate || "—")}</td><td>${period}</td><td>${!b.ent ? "—" : b.part ? (b.ent.start ? `${b.annualTotal} 小時<br><span class="muted">兼職按比例</span>` : "—") : b.ent.days + " 天"}</td>
         <td>${fmtHours(b.annualUsed)}</td><td><b>${fmtHours(b.annualLeft)}</b></td><td>${fmtHours(b.compLeft)}</td></tr>`;
     }).join("") || `<tr><td colspan="7" class="muted">沒有員工</td></tr>`;
   } catch (e) {
-    body.innerHTML = `<tr><td colspan="13">${esc(errMsg(e))}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="14">${esc(errMsg(e))}</td></tr>`;
   }
 }
 
@@ -283,12 +285,12 @@ $("btnRptXlsx").onclick = async () => {
     const { ym, R, punches, monthReqs, bal } = lastReport;
     const label = `${String(ym).slice(0, 4)}-${String(ym).slice(4)}`;
     const wb = XLSX.utils.book_new();
-    addSheet(wb, "月總表", ["員工編號 Emp ID", "姓名 Name", "公司 Company", "應出勤日 Workdays", "出勤日 Attended",
+    addSheet(wb, "月總表", ["員工編號 Emp ID", "姓名 Name", "公司 Company", "身分 Type", "應出勤日 Workdays", "出勤日 Attended",
       "全天請假日 Leave Days", "未打卡日 Absent", "遲到次數 Late", "遲到分鐘 Late Min", "早退次數 Early", "早退分鐘 Early Min",
       "未打上班卡 Missed In", "未打下班卡 Missed Out", "假日出勤 Off-day Work", "外勤日 Field Days", "補打卡 Corrections",
       "在勤時數 Hours", "特休(h) Annual", "補休(h) Comp", "事假(h) Personal", "家庭照顧假(h) Family", "病假(h) Sick",
       "生理假(h) Menstrual", "其他假(h) Other", "加班-加班費(h) OT Pay", "加班-補休(h) OT Comp"],
-      R.summary.map(s => [s.empId, s.name, s.company, s.workdays, s.attended, s.fullLeaveDays, s.absent, s.lateCount, s.lateMin,
+      R.summary.map(s => [s.empId, s.name, s.company, s.part ? "兼職" : "正職", s.part ? "" : s.workdays, s.attended, s.fullLeaveDays, s.absent, s.lateCount, s.lateMin,
         s.earlyCount, s.earlyMin, s.missIn, s.missOut, s.offDayWork, s.field, s.correction, s.workHours,
         s.leave.annual, s.leave.comp, s.leave.personal, s.leave.family, s.leave.sick, s.leave.menstrual, s.leave.other, s.otPay, s.otComp]));
     addSheet(wb, "每日明細", ["日期 Date", "星期 Day", "員工編號 Emp ID", "姓名 Name", "公司 Company", "上班 In", "下班 Out",
@@ -333,8 +335,8 @@ $("btnBackup").onclick = async () => {
     addSheet(wb, "補打卡申請", ["員工編號 Emp ID", "姓名 Name", "日期 Date", "時間 Time", "上下班 In/Out", "原因 Reason", "狀態 Status", "審核人 Reviewer"],
       cors.map(c => [c.empId, c.name, c.date, c.time, TYPE_LABEL[c.type], c.reason,
         { pending: "審核中", approved: "已核准", rejected: "已駁回" }[c.status] || c.status, c.reviewedBy || ""]));
-    addSheet(wb, "員工名單", ["員工編號 Emp ID", "姓名 Name", "公司 Company", "權限 Role", "到職日 Hire Date", "直屬主管 Supervisor", "帳號狀態 Status"],
-      users.map(u => [u.empId, u.name, u.company, u.role === "admin" ? "管理員" : "員工", u.hireDate || "", u.supervisorEmpId || "",
+    addSheet(wb, "員工名單", ["員工編號 Emp ID", "姓名 Name", "公司 Company", "身分 Type", "權限 Role", "到職日 Hire Date", "直屬主管 Supervisor", "帳號狀態 Status"],
+      users.map(u => [u.empId, u.name, u.company, isPart(u) ? "兼職" : "正職", u.role === "admin" ? "管理員" : "員工", u.hireDate || "", u.supervisorEmpId || "",
         u.active ? "使用中" : (u.replacedBy ? "已重設密碼（舊帳號）" : "已停用")]));
     XLSX.writeFile(wb, `打卡系統備份_${y}.xlsx`);
     showMsg(msg, `已匯出「打卡系統備份_${y}.xlsx」：打卡 ${punches.length} 筆、請假加班 ${reqs.length} 筆、補打卡 ${cors.length} 筆。請存到公司的雲端硬碟或 NAS。`, "ok");
@@ -356,13 +358,14 @@ async function loadStaff() {
   $("staffBody").innerHTML = staff.map(s => `<tr>
       <td>${esc(s.empId)}</td><td>${esc(s.name)}</td><td>${esc(s.company)}</td>
       <td>${s.role === "admin" ? '<span class="tag field">管理員</span>' : "員工"}</td>
+      <td>${isPart(s) ? '<span class="tag gray">兼職</span>' : "正職"}</td>
       <td>${s.hireDate ? esc(s.hireDate) : '<span class="tag warn">未設定</span>'}</td>
       <td>${s.supervisorEmpId ? esc(staffName(s.supervisorEmpId)) : '<span class="muted">—</span>'}</td>
       <td>${s.deviceId ? '<span class="tag ok">已綁定</span>' : '<span class="tag gray">未綁定</span>'}</td>
       <td>
         ${s.deviceId ? `<button class="small secondary" data-act="unbind" data-uid="${s.uid}">重設手機</button>` : ""}
         ${s.uid !== me.uid ? `<button class="small danger" data-act="disable" data-uid="${s.uid}">停用</button>` : ""}
-      </td></tr>`).join("") || `<tr><td colspan="8" class="muted">尚無員工</td></tr>`;
+      </td></tr>`).join("") || `<tr><td colspan="9" class="muted">尚無員工</td></tr>`;
   $("rEmp").innerHTML = staff.filter(s => s.uid !== me.uid)
     .map(s => `<option value="${s.uid}">${esc(s.empId)} ${esc(s.name)}</option>`).join("");
   $("nSup").innerHTML = supOptions(null);
@@ -381,8 +384,53 @@ function fillEdit() {
   $("eHire").value = s.hireDate || "";
   $("eSup").innerHTML = supOptions(s.empId);
   $("eSup").value = s.supervisorEmpId || "";
+  $("eType").value = isPart(s) ? "part" : "full";
+  $("ePartAnnual").value = s.partAnnualHours ?? "";
+  $("ePartCalc").textContent = "兼職特休＝同年資正職的特休時數 ×（過去一年實際工時 ÷ 2080 小時）。可以先按「試算」，再自行調整。";
+  togglePartBox();
 }
+function togglePartBox() { $("ePartBox").classList.toggle("hidden", $("eType").value !== "part"); }
+$("eType").onchange = togglePartBox;
 $("eEmp").onchange = fillEdit;
+
+// 兼職特休試算：讀取這位員工本特休年度開始前一年的打卡，算出實際工時，再按比例換算
+$("btnPartCalc").onclick = async () => {
+  const s = staff.find(x => x.uid === $("eEmp").value);
+  const out = $("ePartCalc");
+  if (!s) return;
+  const hire = $("eHire").value || s.hireDate;
+  if (!hire) { out.textContent = "請先設定到職日。"; return; }
+  const today = todayStr();
+  const ent = annualEntitlement(hire, today);
+  if (!ent.start) { out.textContent = `到職未滿半年，${ent.end} 起才有特休。`; return; }
+  $("btnPartCalc").disabled = true;
+  out.textContent = "計算中…";
+  try {
+    const from = addMonths(ent.start, -12) < hire ? hire : addMonths(ent.start, -12);
+    const snap = await getDocs(query(collection(db, "punches"), where("empId", "==", s.empId)));
+    const byDay = {};
+    snap.docs.forEach(d => {
+      const p = { ...d.data(), ts: d.data().ts.toDate() };
+      const ds = ymdToInput(p.ymd);
+      if (ds >= from && ds < ent.start) (byDay[ds] = byDay[ds] || []).push(p);
+    });
+    let mins = 0, days = 0;
+    for (const list of Object.values(byDay)) {
+      const sum = summarizeDay(list, [], true);
+      if (sum.firstIn && sum.lastOut) { mins += workMinutes(sum.firstIn.ts, sum.lastOut.ts); days++; }
+    }
+    const hours = Math.round(mins / 60 * 10) / 10;
+    // 未滿一整年（例如到職第一年）時，正職工時也按同一段期間的週數比例計算
+    const spanDays = Math.max(1, Math.round((Date.parse(ent.start) - Date.parse(from)) / 86400000));
+    const fullHours = FULLTIME_YEAR_HOURS * Math.min(1, spanDays / 365);
+    const suggest = Math.round(ent.days * HOURS_PER_DAY * Math.min(1, hours / fullHours) * 2) / 2;
+    $("ePartAnnual").value = suggest;
+    out.textContent = `${from} ～ ${ent.start} 共上班 ${days} 天、${hours} 小時；同年資正職特休 ${ent.days} 天（${ent.days * HOURS_PER_DAY} 小時）`
+      + ` × ${hours} ÷ ${Math.round(fullHours)} ＝ 建議 ${suggest} 小時（本年度 ${ent.start} ～ ${ent.end}）。確認後請按「儲存變更」。`
+      + (snap.empty ? "（系統裡還沒有這段期間的打卡紀錄，請依實際工時自行填寫）" : "");
+  } catch (e) { out.textContent = errMsg(e); }
+  $("btnPartCalc").disabled = false;
+};
 
 $("btnEdit").onclick = async () => {
   const msg = $("eMsg");
@@ -396,7 +444,9 @@ $("btnEdit").onclick = async () => {
     await updateDoc(doc(db, "users", s.uid), {
       name, role: $("eRole").value,
       hireDate: $("eHire").value || null,
-      supervisorEmpId: $("eSup").value || null
+      supervisorEmpId: $("eSup").value || null,
+      empType: $("eType").value,
+      partAnnualHours: $("eType").value === "part" && $("ePartAnnual").value !== "" ? Math.max(0, Number($("ePartAnnual").value)) : null
     });
     showMsg(msg, `已更新 ${name} 的資料`, "ok");
     await loadStaff();
@@ -451,6 +501,7 @@ $("btnAdd").onclick = async () => {
     batch.set(doc(db, "users", cred.user.uid), {
       empId, name, company: companyOf(empId), role: $("nRole").value,
       hireDate: $("nHire").value || null, supervisorEmpId: $("nSup").value || null,
+      empType: $("nType").value, partAnnualHours: null,
       active: true, deviceId: null, mustChangePassword: true, createdAt: serverTimestamp()
     });
     batch.set(doc(db, "logins", empId), { email, uid: cred.user.uid });
@@ -478,6 +529,7 @@ $("btnResetPw").onclick = async () => {
     batch.set(doc(db, "users", cred.user.uid), {
       empId: s.empId, name: s.name, company: s.company, role: s.role,
       hireDate: s.hireDate || null, supervisorEmpId: s.supervisorEmpId || null,
+      empType: s.empType || "full", partAnnualHours: s.partAnnualHours ?? null,
       active: true, deviceId: s.deviceId || null, mustChangePassword: true, createdAt: serverTimestamp()
     });
     batch.update(doc(db, "users", s.uid), { active: false, replacedBy: cred.user.uid });
@@ -574,7 +626,7 @@ async function loadPendingRequests() {
       let bal = "";
       if (r.kind === "leave" && (r.leaveType === "annual" || r.leaveType === "comp")) {
         const emp = staff.find(s => s.empId === r.empId);
-        const b = computeBalances(await reqsOf(r.empId), emp ? emp.hireDate : null, today);
+        const b = computeBalances(await reqsOf(r.empId), emp ? emp.hireDate : null, today, emp);
         bal = r.leaveType === "annual"
           ? (emp && emp.hireDate ? `特休剩餘 ${fmtHours(b.annualLeft)}（已含本單）` : "⚠ 尚未設定到職日，無法核對特休")
           : `補休剩餘 ${fmtHours(b.compLeft)}（已含本單）`;

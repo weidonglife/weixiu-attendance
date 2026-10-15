@@ -7,9 +7,10 @@ import {
   todayStr, ymOfStr, toHolidayMap, isOffDay, offDayLabel, buildLeaveMap, calcLeaveHours, calcOtHours,
   computeBalances, fmtHours, LEAVE_TYPES, STATUS_INFO, ACTIVE_STATUS, OT_MONTH_LIMIT,
   reqTitle, reqWhen, reqSortKey, leaveOverlaps, fmtDateStr
-} from "./common.js";
+  , isPart
+} from "./common.js?v=8";
 import { onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { startBoard } from "./board.js";
+import { startBoard } from "./board.js?v=8";
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, collection, query, where, getDocs, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -247,8 +248,10 @@ async function loadMonth() {
         if (isOffDay(ds, holidays)) continue; // 假日沒打卡就略過
         if (office && office.goLive && ds < office.goLive) continue; // 系統啟用前
         if (me.hireDate && ds < me.hireDate) continue; // 到職前
-        const s = summarizeDay([], wins);
-        if (s.fullLeave) {
+        if (isPart(me) && !wins.length) continue; // 兼職沒來上班的日子不列
+        const s = summarizeDay([], wins, isPart(me));
+        if (s.fullLeave || (isPart(me) && wins.length)) {
+          if (isPart(me)) s.tags = [["field", `請假 ${s.leaveHours}h`]];
           rows.push(`<tr><td>${fmtYmd(ymd)}</td><td>—</td><td>—</td><td>${tagsHtml(s.tags)}</td></tr>`);
         } else if (!isToday) {
           const tags = [["warn", "未打卡"]].concat(wins.length ? [["field", `請假 ${s.leaveHours}h`]] : []);
@@ -256,7 +259,7 @@ async function loadMonth() {
         }
         continue;
       }
-      const s = summarizeDay(dayList, wins);
+      const s = summarizeDay(dayList, wins, isPart(me));
       let tags = isToday ? s.tags.filter(t => t[1] !== "未打下班卡" && t[1] !== "早退") : s.tags;
       const off = offDayLabel(ds, holidays);
       if (off) tags = [["gray", off]].concat(tags.filter(t => t[1] !== "未打上班卡" && t[1] !== "未打下班卡" && t[1] !== "遲到" && t[1] !== "早退"));
@@ -343,7 +346,7 @@ function leaveDraft() {
     startHour: Number($("lvStartHour").value), endHour: Number($("lvEndHour").value)
   };
 }
-function balances() { return computeBalances(myReqs, me.hireDate, todayStr()); }
+function balances() { return computeBalances(myReqs, me.hireDate, todayStr(), me); }
 
 // 檢查假單，回傳 { hours, error }
 function checkLeave(r) {
@@ -480,10 +483,10 @@ function renderBalances() {
   if (!me.hireDate) {
     annual = `<div><div class="sub">特休</div><div class="num">—</div><div class="sub">管理員尚未設定到職日</div></div>`;
   } else if (!b.ent.start) {
-    annual = `<div><div class="sub">特休</div><div class="num">0</div><div class="sub">${esc(b.ent.end)} 起可休 3 天</div></div>`;
+    annual = `<div><div class="sub">特休</div><div class="num">0</div><div class="sub">${esc(b.ent.end)} 起可休${b.part ? "（兼職按工時比例）" : " 3 天"}</div></div>`;
   } else {
     annual = `<div><div class="sub">特休剩餘</div><div class="num">${fmtHours(b.annualLeft)}</div>
-      <div class="sub">本年度 ${b.ent.days} 天，已用 ${fmtHours(b.annualUsed)}（含審核中）<br>年度期間 ${esc(b.ent.start)} ～ ${esc(b.ent.end)}</div></div>`;
+      <div class="sub">本年度 ${b.part ? `${b.annualTotal} 小時（兼職按工時比例）` : `${b.ent.days} 天`}，已用 ${fmtHours(b.annualUsed)}（含審核中）<br>年度期間 ${esc(b.ent.start)} ～ ${esc(b.ent.end)}</div></div>`;
   }
   const comp = `<div><div class="sub">補休剩餘</div><div class="num">${fmtHours(b.compLeft)}</div>
     <div class="sub">加班換得 ${b.compEarned} 小時，已用 ${b.compUsed} 小時</div></div>`;
