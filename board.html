@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>今日出勤看板</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="inner">
+    <h1>唯修集團 今日出勤</h1>
+    <div class="who"><span id="who"></span> <button id="btnLogout" class="small secondary hidden" type="button">登出</button></div>
+  </div>
+</header>
+<div class="wrap wide">
+  <div id="vLoading" class="card"><p class="muted">載入中…</p></div>
+  <div id="vLogin" class="card hidden" style="max-width:420px;margin:0 auto">
+    <h2>登入</h2>
+    <p class="muted">請用員工編號登入。登入後這個畫面會一直保持開啟、即時更新。</p>
+    <label for="loginId">員工編號</label>
+    <input id="loginId" autocomplete="username" placeholder="例如 W001" autocapitalize="characters">
+    <label for="loginPw">密碼</label>
+    <input id="loginPw" type="password" autocomplete="current-password">
+    <button id="btnLogin" class="block">登入</button>
+    <div id="loginMsg" class="msg hidden"></div>
+  </div>
+  <div id="vDenied" class="card hidden"><p id="deniedText"></p></div>
+  <div id="vBoard" class="hidden"></div>
+</div>
+<script type="module">
+import { auth, db, loginWithEmpId, logout, errMsg, showMsg, hideMsg } from "./common.js";
+import { startBoard } from "./board.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+const $ = id => document.getElementById(id);
+const show = v => ["vLoading", "vLogin", "vDenied", "vBoard"].forEach(x => $(x).classList.toggle("hidden", x !== v));
+let stop = null;
+onAuthStateChanged(auth, async user => {
+  if (stop) { stop(); stop = null; }
+  $("btnLogout").classList.toggle("hidden", !user);
+  if (!user) { $("who").textContent = ""; show("vLogin"); return; }
+  show("vLoading");
+  try {
+    const s = await getDoc(doc(db, "users", user.uid));
+    if (!s.exists() || s.data().active !== true) { $("deniedText").textContent = "這個帳號目前無法使用，請聯絡管理員。"; show("vDenied"); return; }
+    $("who").textContent = `${s.data().name}（${s.data().empId}）`;
+    show("vBoard");
+    stop = startBoard($("vBoard"), { big: true });
+  } catch (e) { $("deniedText").textContent = errMsg(e); show("vDenied"); }
+});
+$("btnLogin").onclick = async () => {
+  hideMsg($("loginMsg")); $("btnLogin").disabled = true;
+  try { await loginWithEmpId($("loginId").value, $("loginPw").value); $("loginPw").value = ""; }
+  catch (e) { showMsg($("loginMsg"), errMsg(e), "err"); }
+  $("btnLogin").disabled = false;
+};
+$("loginPw").addEventListener("keydown", e => { if (e.key === "Enter") $("btnLogin").click(); });
+$("btnLogout").onclick = () => logout();
+</script>
+</body>
+</html>

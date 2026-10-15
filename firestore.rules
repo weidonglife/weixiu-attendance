@@ -143,7 +143,38 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ===== 今日出勤看板：精簡資料（不含 GPS、假別、事由）=====
+    // 每人每天一筆，員工打卡後自動更新；時間只能是伺服器時間
+    match /presence/{id} {
+      allow get, list: if isActive();
+      allow create, update: if isAdmin()
+        || (isActive()
+            && id == string(request.resource.data.ymd) + '_' + me().empId
+            && request.resource.data.keys().hasOnly(['ymd', 'empId', 'name', 'company', 'mode', 'customer', 'lastType', 'inAt', 'outAt', 'lastAt'])
+            && request.resource.data.empId == me().empId
+            && request.resource.data.name == me().name
+            && request.resource.data.company == me().company
+            && request.resource.data.ymd == ymdNow()
+            && request.resource.data.lastType in ['in', 'out']
+            && request.resource.data.mode in ['office', 'field']
+            && request.resource.data.lastAt == request.time
+            && (!('inAt' in request.resource.data) || request.resource.data.inAt == request.time
+                || (resource != null && 'inAt' in resource.data && request.resource.data.inAt == resource.data.inAt))
+            && (!('outAt' in request.resource.data) || request.resource.data.outAt == request.time
+                || (resource != null && 'outAt' in resource.data && request.resource.data.outAt == resource.data.outAt)));
+      allow delete: if isAdmin();
+    }
+    // 請假時段（只有日期與時間，由管理後台依已核准假單自動同步）
+    match /leaveBoard/{id} {
+      allow get, list: if isActive();
+      allow write: if isAdmin();
+    }
+
     // ===== 系統設定 =====
+    match /settings/directory {
+      allow get: if isActive();
+      allow write: if isAdmin();
+    }
     match /settings/holidays {
       allow get: if isActive();
       allow write: if isAdmin();

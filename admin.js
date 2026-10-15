@@ -84,6 +84,33 @@ async function loadHolidays() {
 async function loadApprovedLeaves() {
   const snap = await getDocs(query(collection(db, "requests"), where("status", "==", "approved")));
   approvedLeaves = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => r.kind === "leave");
+  syncLeaveBoard().catch(e => console.warn("leaveBoard", e));
+}
+
+// 看板用的請假時段（只有時間，不含假別與事由），跟著已核准假單同步
+const LB_KEYS = ["empId", "name", "company", "startDate", "endDate", "startHour", "endHour"];
+async function syncLeaveBoard() {
+  const today = todayStr();
+  const want = new Map(approvedLeaves.filter(r => r.endDate >= today)
+    .map(r => [r.id, Object.fromEntries(LB_KEYS.map(k => [k, r[k] ?? null]))]));
+  const snap = await getDocs(collection(db, "leaveBoard"));
+  const have = new Map(snap.docs.map(d => [d.id, d.data()]));
+  const batch = writeBatch(db);
+  let n = 0;
+  for (const [id, v] of want) {
+    const h = have.get(id);
+    if (!h || LB_KEYS.some(k => (h[k] ?? null) !== v[k])) { batch.set(doc(db, "leaveBoard", id), v); n++; }
+  }
+  for (const id of have.keys()) if (!want.has(id)) { batch.delete(doc(db, "leaveBoard", id)); n++; }
+  if (n) await batch.commit();
+}
+
+// 看板用的員工名單（只有編號、姓名、公司）
+async function syncDirectory() {
+  const list = staff.map(s => ({ empId: s.empId, name: s.name, company: s.company }));
+  const cur = await getDoc(doc(db, "settings", "directory"));
+  if (cur.exists() && JSON.stringify(cur.data().list) === JSON.stringify(list)) return;
+  await setDoc(doc(db, "settings", "directory"), { list, updatedAt: serverTimestamp() });
 }
 
 // ===== 每日出勤 =====
@@ -343,6 +370,7 @@ async function loadStaff() {
   $("eEmp").innerHTML = staff.map(s => `<option value="${s.uid}">${esc(s.empId)} ${esc(s.name)}</option>`).join("");
   if (keep && staff.some(s => s.uid === keep)) $("eEmp").value = keep;
   fillEdit();
+  syncDirectory().catch(e => console.warn("directory", e));
 }
 
 function fillEdit() {
@@ -498,6 +526,17 @@ $("corBody").onclick = async e => {
         customer: "", note: c.reason, correctionId: c.id, approvedBy: me.empId, deviceId: null
       });
       batch.update(doc(db, "corrections", c.id), { status: "approved", ...review });
+      if (c.date === todayStr()) {
+        // 今天的補打卡也更新到看板
+        const pref = doc(db, "presence", `${ymdOf(when)}_${c.empId}`);
+        const cur = await getDoc(pref);
+        const pd = cur.exists() ? cur.data() : {};
+        const upd = { ymd: ymdOf(when), empId: c.empId, name: c.name, company: c.company, lastAt: serverTimestamp() };
+        if (!cur.exists()) { upd.mode = "office"; upd.customer = ""; upd.lastType = c.type; }
+        if (c.type === "in" && (!pd.inAt || pd.inAt.toDate() > when)) upd.inAt = Timestamp.fromDate(when);
+        if (c.type === "out") { upd.outAt = Timestamp.fromDate(when); upd.lastType = "out"; }
+        batch.set(pref, upd, { merge: true });
+      }
     } else {
       batch.update(doc(db, "corrections", c.id), { status: "rejected", ...review });
     }

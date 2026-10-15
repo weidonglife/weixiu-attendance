@@ -9,8 +9,9 @@ import {
   reqTitle, reqWhen, reqSortKey, leaveOverlaps, fmtDateStr
 } from "./common.js";
 import { onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { startBoard } from "./board.js";
 import {
-  doc, getDoc, updateDoc, addDoc, collection, query, where, getDocs, serverTimestamp
+  doc, getDoc, setDoc, updateDoc, addDoc, collection, query, where, getDocs, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $ = id => document.getElementById(id);
@@ -22,6 +23,7 @@ let office = null;    // 公司位置設定
 let holidays = new Map(); // 國定假日
 let myReqs = [];      // 我的請假／加班申請
 let mode = "office";  // office | field
+let boardStop = null; // 今日出勤看板（點分頁時才啟動）
 const deviceId = getDeviceId();
 
 // ===== 時鐘（僅顯示用，實際打卡時間由伺服器決定）=====
@@ -109,7 +111,8 @@ $("btnLogout").onclick = $("btnBlockedLogout").onclick = () => logout();
 document.querySelectorAll("#mainTabs button[data-tab]").forEach(btn => {
   btn.onclick = () => {
     document.querySelectorAll("#mainTabs button[data-tab]").forEach(b => b.classList.toggle("on", b === btn));
-    ["pPunch", "pLeave", "pReview"].forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.tab));
+    ["pPunch", "pLeave", "pBoard", "pReview"].forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.tab));
+    if (btn.dataset.tab === "pBoard" && !boardStop) boardStop = startBoard($("boardRoot"));
   };
 });
 
@@ -173,6 +176,7 @@ async function punch(type) {
     const saved = await getDoc(ref);
     const t = saved.data().ts.toDate();
     showMsg(msg, `${TYPE_LABEL[type]}打卡成功：${fmtTime(t)}（${MODE_LABEL[mode]}）`, "ok");
+    updatePresence(type, customer);
     if (mode === "field") $("customer").value = "";
     loadToday(); loadMonth();
   } catch (e) {
@@ -183,6 +187,22 @@ async function punch(type) {
   } finally {
     $("btnIn").disabled = $("btnOut").disabled = false;
   }
+}
+
+// 更新「今日出勤看板」用的精簡資料（失敗不影響打卡紀錄本身）
+async function updatePresence(type, customer) {
+  try {
+    const ymd = ymdOf(new Date());
+    const ref = doc(db, "presence", `${ymd}_${me.empId}`);
+    const cur = await getDoc(ref);
+    const data = {
+      ymd, empId: me.empId, name: me.name, company: me.company,
+      mode, customer: mode === "field" ? customer : "", lastType: type, lastAt: serverTimestamp()
+    };
+    if (type === "in" && !(cur.exists() && cur.data().inAt)) data.inAt = serverTimestamp();
+    if (type === "out") data.outAt = serverTimestamp();
+    await setDoc(ref, data, { merge: true });
+  } catch (e) { console.warn("presence", e); }
 }
 
 async function fetchPunches(ym) {
