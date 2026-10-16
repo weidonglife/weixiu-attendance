@@ -23,7 +23,7 @@ export const db = getFirestore(app);
 
 // ===== 公司規則 =====
 // 公司名稱清單（新增員工時從這裡選；看板也依這個順序分組）
-export const COMPANIES = { W: "唯修科技", S: "唯校中心", C: "傳創機電" };
+export const COMPANIES = { W: "唯修科技", C: "傳創機電", S: "唯校中心" };
 export const COMPANY_LIST = Object.values(COMPANIES);
 export const WORK = { start: "08:00", lateAfter: "08:10", end: "17:00" };
 export const DEFAULT_RADIUS = 200; // 公尺
