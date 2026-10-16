@@ -180,7 +180,8 @@ export function startBoard(root, { big = false } = {}) {
       <div class="ro-v"><span class="seg7">${n}</span>${of != null ? `<span class="ro-of">/${of}</span>` : ""}</div></div>`;
     $r("stats").innerHTML = readout(arrived, "已到", "c-in", workday ? counted : null)
       + readout(groups.field.length, "外勤", "c-field")
-      + (workday ? readout(groups.leave.length, "請假", "c-leave") + readout(overdue, "未到", overdue ? "c-late" : "c-zero") : "");
+      + readout(groups.leave.length, "請假", "c-leave") // 假日也顯示（假日不算請假，會是 0）
+      + (workday ? readout(overdue, "未到", overdue ? "c-late" : "c-zero") : "");
     renderGauge(groups, counted, workday, overdue);
 
     if (view === "plates") {
