@@ -164,10 +164,10 @@ $("lineBody").onclick = async e => {
     $("lineBody").innerHTML = `
       <p><b>步驟 1</b>　加入出勤通知官方帳號好友（已加過可跳過）</p>
       <a class="btnlink" href="https://line.me/R/ti/p/${oa}" target="_blank" rel="noopener">加入好友</a>
-      <p style="margin-top:14px"><b>步驟 2</b>　把綁定碼傳給官方帳號（按下面按鈕會自動帶入）</p>
+      <p style="margin-top:14px"><b>步驟 2</b>　把綁定碼傳給官方帳號：按下面按鈕會打開 LINE 並帶入文字，<b>記得再按「送出」</b></p>
       <div class="bindcode">${esc(code)}</div>
       <a class="btnlink" href="https://line.me/R/oaMessage/${oa}/?${encodeURIComponent("綁定 " + code)}" target="_blank" rel="noopener">傳送綁定碼</a>
-      <p class="muted">綁定碼 10 分鐘內有效。用電腦的話，請在 LINE 裡搜尋 ${esc(LINE_OA_ID)} 加好友，再傳「綁定 ${esc(code)}」。</p>
+      <p class="muted">綁定碼 10 分鐘內有效。也可以直接在「唯修集團 出勤通知」的對話裡自己打「綁定 ${esc(code)}」送出。</p>
       <p style="margin-top:14px"><b>步驟 3</b>　LINE 回覆「綁定成功」後，按這裡確認</p>
       <button type="button" class="secondary" data-line="check">我已完成，重新檢查</button>`;
   } catch (err) { showMsg($("lineMsg"), errMsg(err), "err"); btn.disabled = false; }
