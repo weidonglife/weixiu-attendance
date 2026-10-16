@@ -56,8 +56,8 @@ export function logout() { return signOut(auth); }
 // ===== LINE 通知 =====
 // NOTIFY_URL：Google Apps Script 通知服務的網址（部署後填入）；空白＝通知功能尚未啟用，網站其他功能照常
 // LINE_OA_ID：出勤通知官方帳號的 ID（例如 "@123abcde"）
-export const NOTIFY_URL = "";
-export const LINE_OA_ID = "";
+export const NOTIFY_URL = "https://script.google.com/macros/s/AKfycbyRplOidL8m1MxkN0fVKrAsf2XYY0Dl9OtzXszHw9dv-8PcjeqpTJz9y_47jC_inZ7fwg/exec";
+export const LINE_OA_ID = "@068imzxt";
 export async function callNotify(action, data = {}) {
   if (!NOTIFY_URL) throw new Error("通知服務尚未設定");
   if (!auth.currentUser) throw new Error("請先登入");

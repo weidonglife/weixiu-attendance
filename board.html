@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=11">
-<link rel="stylesheet" href="board.css?v=11">
+<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="board.css?v=12">
 </head>
 <body class="dark-page">
 <header class="top">
@@ -35,8 +35,8 @@
 </div>
 <div id="corner" class="corner hidden"><span id="whoCorner"></span> <button id="btnLogout2" class="small secondary" type="button">登出</button></div>
 <script type="module">
-import { auth, db, loginWithEmpId, logout, errMsg, showMsg, hideMsg } from "./common.js?v=11";
-import { startBoard } from "./board.js?v=11";
+import { auth, db, loginWithEmpId, logout, errMsg, showMsg, hideMsg } from "./common.js?v=12";
+import { startBoard } from "./board.js?v=12";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 const $ = id => document.getElementById(id);
