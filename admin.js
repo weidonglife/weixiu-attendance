@@ -6,15 +6,15 @@ import {
   todayStr, toHolidayMap, isOffDay, offDayLabel, buildLeaveMap, computeBalances, fmtHours,
   LEAVE_LABEL, STATUS_INFO, reqTitle, reqWhen, reqSortKey,
   computeMonthReport, leaveBalanceOverview, fmtTimeSec, OT_COMP_LABEL,
-  isPart, EMP_TYPE_LABEL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY
-} from "./common.js?v=10";
+  isPart, EMP_TYPE_LABEL, notify, callNotify, NOTIFY_URL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY
+} from "./common.js?v=11";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, writeBatch,
-  serverTimestamp, Timestamp
+  serverTimestamp, Timestamp, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $ = id => document.getElementById(id);
@@ -31,7 +31,7 @@ let approvedLeaves = [];   // 所有已核准的假單（出勤表用）
 let officeCfg = {};        // 公司位置設定（含系統啟用日 goLive）
 
 onAuthStateChanged(auth, async user => {
-  if (!user) { me = null; $("who").textContent = ""; show("vLogin"); return; }
+  if (!user) { me = null; stopPendingWatch(); $("who").textContent = ""; show("vLogin"); return; }
   show("vLoading");
   try {
     const snap = await getDoc(doc(db, "users", user.uid));
@@ -45,9 +45,8 @@ onAuthStateChanged(auth, async user => {
     await Promise.all([loadStaff(), loadHolidays(), loadApprovedLeaves(), loadOffice()]);
     loadDay();
     loadReport();
-    loadCorrections();
-    loadPendingRequests();
     loadRecords();
+    watchPending();
   } catch (e) { show("vDenied"); }
 });
 
@@ -376,10 +375,11 @@ async function loadStaff() {
       <td>${s.hireDate ? esc(s.hireDate) : '<span class="tag warn">未設定</span>'}</td>
       <td>${s.supervisorEmpId ? esc(staffName(s.supervisorEmpId)) : '<span class="muted">—</span>'}</td>
       <td>${s.deviceId ? '<span class="tag ok">已綁定</span>' : '<span class="tag gray">未綁定</span>'}</td>
+      <td data-linecell="${esc(s.empId)}"><span class="muted">—</span></td>
       <td>
         ${s.deviceId ? `<button class="small secondary" data-act="unbind" data-uid="${s.uid}">重設手機</button>` : ""}
         ${s.uid !== me.uid ? `<button class="small danger" data-act="disable" data-uid="${s.uid}">停用</button>` : ""}
-      </td></tr>`).join("") || `<tr><td colspan="9" class="muted">尚無員工</td></tr>`;
+      </td></tr>`).join("") || `<tr><td colspan="10" class="muted">尚無員工</td></tr>`;
   $("rEmp").innerHTML = staff.filter(s => s.uid !== me.uid)
     .map(s => `<option value="${s.uid}">${esc(s.empId)} ${esc(s.name)}</option>`).join("");
   $("nSup").innerHTML = supOptions(null);
@@ -388,6 +388,20 @@ async function loadStaff() {
   if (keep && staff.some(s => s.uid === keep)) $("eEmp").value = keep;
   fillEdit();
   syncDirectory().catch(e => console.warn("directory", e));
+  fillLineCol();
+}
+// 員工列表的「LINE」欄：誰已綁定 LINE 通知（同時讓通知服務更新誰是管理員）
+async function fillLineCol() {
+  if (!NOTIFY_URL) return;
+  try {
+    const { list } = await callNotify("list");
+    const bound = new Map(list.map(x => [x.empId, x.displayName]));
+    document.querySelectorAll("#staffBody td[data-linecell]").forEach(td => {
+      const name = bound.get(td.dataset.linecell);
+      td.innerHTML = bound.has(td.dataset.linecell)
+        ? `<span class="tag ok" title="${esc(name || "")}">已綁定</span>` : '<span class="tag gray">未綁定</span>';
+    });
+  } catch (e) { console.warn("LINE list", e); }
 }
 
 function fillEdit() {
@@ -560,6 +574,38 @@ $("btnResetPw").onclick = async () => {
   $("btnResetPw").disabled = false;
 };
 
+// ===== 待審核即時提醒 =====
+// 有人送出補打卡、請假／加班，或主管核准後，數字和頂端提醒會馬上更新（不用重新整理）
+let pendingUnsubs = [];
+const counts = { cor: 0, req: 0 };
+const baseTitle = document.title;
+function watchPending() {
+  stopPendingWatch();
+  let t1 = null, t2 = null;
+  pendingUnsubs.push(onSnapshot(query(collection(db, "corrections"), where("status", "==", "pending")), () => {
+    clearTimeout(t1); t1 = setTimeout(loadCorrections, 300);
+  }, () => {}));
+  pendingUnsubs.push(onSnapshot(query(collection(db, "requests"), where("status", "in", ["pending_supervisor", "pending_admin"])), () => {
+    clearTimeout(t2); t2 = setTimeout(loadPendingRequests, 300);
+  }, () => {}));
+}
+function stopPendingWatch() { pendingUnsubs.splice(0).forEach(u => u()); }
+function renderBanner() {
+  const parts = [];
+  if (counts.req) parts.push(`<a href="#" data-go="tReq">請假／加班 ${counts.req} 張</a>`);
+  if (counts.cor) parts.push(`<a href="#" data-go="tCor">補打卡 ${counts.cor} 張</a>`);
+  $("admBanner").classList.toggle("hidden", !parts.length);
+  $("admBanner").innerHTML = parts.length ? `🔔 等你核准：${parts.join("、")}` : "";
+  const n = counts.req + counts.cor;
+  document.title = n ? `(${n}) ${baseTitle}` : baseTitle;
+}
+$("admBanner").onclick = e => {
+  const a = e.target.closest("a[data-go]");
+  if (!a) return;
+  e.preventDefault();
+  document.querySelector(`.tabs button[data-tab="${a.dataset.go}"]`).click();
+};
+
 // ===== 補打卡審核 =====
 let pending = [];
 async function loadCorrections() {
@@ -568,6 +614,7 @@ async function loadCorrections() {
     const snap = await getDocs(query(collection(db, "corrections"), where("status", "==", "pending")));
     pending = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
     $("corCount").textContent = pending.length ? `(${pending.length})` : "";
+    counts.cor = pending.length; renderBanner();
     body.innerHTML = pending.map(c => `<tr>
         <td>${esc(c.name)}<br><span class="muted">${esc(c.empId)}</span></td>
         <td>${esc(c.date)} ${esc(c.time)}</td><td>${TYPE_LABEL[c.type]}</td><td>${esc(c.reason)}</td>
@@ -611,6 +658,7 @@ $("corBody").onclick = async e => {
       batch.update(doc(db, "corrections", c.id), { status: "rejected", ...review });
     }
     await batch.commit();
+    notify("correction", c.id);
     showMsg($("corMsg"), `已${btn.dataset.act === "approve" ? "核准" : "駁回"} ${c.name} 的申請`, "ok");
     await loadCorrections();
     loadDay();
@@ -637,6 +685,7 @@ async function loadPendingRequests() {
     const snap = await getDocs(query(collection(db, "requests"), where("status", "in", ["pending_supervisor", "pending_admin"])));
     pendingReqs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => reqSortKey(a).localeCompare(reqSortKey(b)));
     $("reqCount").textContent = pendingReqs.length ? `(${pendingReqs.length})` : "";
+    counts.req = pendingReqs.filter(r => r.status === "pending_admin").length; renderBanner();
     if (!pendingReqs.length) { body.innerHTML = "目前沒有待核准的申請"; return; }
     const today = todayStr();
     const parts = [];
@@ -683,6 +732,7 @@ $("reqBody").onclick = async e => {
       status: btn.dataset.act === "approve" ? "approved" : "rejected",
       adminBy: me.empId, adminAt: serverTimestamp(), adminNote: note
     });
+    notify("request", r.id);
     showMsg($("reqMsg"), `已${btn.dataset.act === "approve" ? "核准" : "駁回"} ${r.name} 的${reqTitle(r)}申請`, "ok");
     await loadApprovedLeaves();
     loadPendingRequests();

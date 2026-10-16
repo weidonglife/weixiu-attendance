@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=10">
-<link rel="stylesheet" href="board.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="board.css?v=11">
 </head>
 <body>
 <header class="top">
@@ -57,6 +57,7 @@
 
   <!-- 主畫面 -->
   <div id="vMain" class="hidden">
+    <div id="revBanner" class="banner hidden" role="button" tabindex="0"></div>
     <div class="tabs" id="mainTabs">
       <button data-tab="pPunch" class="on" type="button">打卡</button>
       <button data-tab="pLeave" type="button">請假／加班</button>
@@ -193,12 +194,18 @@
     </div>
   </section>
 
+    <div id="lineCard" class="card hidden">
+      <h2>LINE 通知</h2>
+      <div id="lineBody"></div>
+      <div id="lineMsg" class="msg hidden"></div>
+    </div>
+
     <button id="btnLogout" class="secondary block">登出</button>
   </div>
 
   <footer class="note">唯修科技 · 唯校中心 · 傳創機電</footer>
 </div>
 
-<script type="module" src="app.js?v=10"></script>
+<script type="module" src="app.js?v=11"></script>
 </body>
 </html>

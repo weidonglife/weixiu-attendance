@@ -53,6 +53,30 @@ export async function loginWithEmpId(empIdRaw, password) {
 }
 export function logout() { return signOut(auth); }
 
+// ===== LINE 通知 =====
+// NOTIFY_URL：Google Apps Script 通知服務的網址（部署後填入）；空白＝通知功能尚未啟用，網站其他功能照常
+// LINE_OA_ID：出勤通知官方帳號的 ID（例如 "@123abcde"）
+export const NOTIFY_URL = "";
+export const LINE_OA_ID = "";
+export async function callNotify(action, data = {}) {
+  if (!NOTIFY_URL) throw new Error("通知服務尚未設定");
+  if (!auth.currentUser) throw new Error("請先登入");
+  const idToken = await auth.currentUser.getIdToken();
+  const res = await fetch(NOTIFY_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" }, // 用 text/plain 避免跨網域預檢
+    body: JSON.stringify({ action, idToken, ...data })
+  });
+  const j = await res.json();
+  if (!j.ok) throw new Error(j.error || "通知服務發生錯誤");
+  return j;
+}
+// 送出／審核後通知下一個處理的人；失敗不影響原本的操作
+export function notify(kind, id) {
+  if (!NOTIFY_URL || !id) return;
+  callNotify("notify", { kind, id }).catch(e => console.warn("LINE 通知失敗", e));
+}
+
 // ===== 台灣時間 =====
 const TZ = "Asia/Taipei";
 export function twParts(date) {

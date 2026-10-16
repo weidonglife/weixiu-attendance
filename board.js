@@ -3,7 +3,7 @@
 import {
   db, fmtTime, fmtTimeSec, fmtDateLong, todayStr, ymdOf, toHolidayMap, offDayLabel,
   leaveDaySegments, summarizeDay, esc, COMPANIES
-} from "./common.js?v=10";
+} from "./common.js?v=11";
 import {
   collection, query, where, onSnapshot, doc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";

@@ -7,12 +7,12 @@ import {
   todayStr, ymOfStr, toHolidayMap, isOffDay, offDayLabel, buildLeaveMap, calcLeaveHours, calcOtHours,
   computeBalances, fmtHours, LEAVE_TYPES, STATUS_INFO, ACTIVE_STATUS, OT_MONTH_LIMIT,
   reqTitle, reqWhen, reqSortKey, leaveOverlaps, fmtDateStr
-  , isPart
-} from "./common.js?v=10";
+  , isPart, notify, callNotify, NOTIFY_URL, LINE_OA_ID
+} from "./common.js?v=11";
 import { onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { startBoard } from "./board.js?v=10";
+import { startBoard } from "./board.js?v=11";
 import {
-  doc, getDoc, setDoc, updateDoc, addDoc, collection, query, where, getDocs, serverTimestamp
+  doc, getDoc, setDoc, updateDoc, addDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $ = id => document.getElementById(id);
@@ -37,7 +37,7 @@ setInterval(tick, 1000); tick();
 
 // ===== 登入狀態 =====
 onAuthStateChanged(auth, async user => {
-  if (!user) { me = null; $("who").textContent = ""; show("vLogin"); return; }
+  if (!user) { me = null; stopReviewWatch(); $("who").textContent = ""; show("vLogin"); return; }
   show("vLoading");
   try {
     const snap = await getDoc(doc(db, "users", user.uid));
@@ -131,8 +131,47 @@ async function initMain() {
   loadCorrections();
   await loadRequests();
   loadMonth();
-  loadReview();
+  watchReview();
+  loadLine();
 }
+
+// ===== LINE 通知綁定 =====
+async function loadLine() {
+  if (!NOTIFY_URL) return; // 通知服務還沒設定好時不顯示
+  $("lineCard").classList.remove("hidden");
+  hideMsg($("lineMsg"));
+  $("lineBody").innerHTML = `<p class="muted">讀取中…</p>`;
+  try {
+    const r = await callNotify("status");
+    $("lineBody").innerHTML = r.bound
+      ? `<p>✅ 已綁定 LINE${r.displayName ? `（${esc(r.displayName)}）` : ""}。請假、加班、補打卡的審核通知會傳到你的 LINE。</p>
+         <button class="small secondary" type="button" data-line="unbind">解除綁定</button>`
+      : `<p class="muted">綁定後，有人送申請給你審核、或你的申請有結果時，會馬上用 LINE 通知你。</p>
+         <button type="button" data-line="bind">綁定 LINE</button>`;
+  } catch (e) { $("lineBody").innerHTML = `<p class="muted">暫時無法連線到通知服務（${esc(e.message)}）</p>`; }
+}
+$("lineBody").onclick = async e => {
+  const btn = e.target.closest("[data-line]");
+  if (!btn) return;
+  const act = btn.dataset.line;
+  if (act === "check") { loadLine(); return; }
+  if (act === "unbind" && !btn.dataset.confirm) { btn.dataset.confirm = "1"; btn.textContent = "確定解除？"; return; }
+  btn.disabled = true;
+  try {
+    if (act === "unbind") { await callNotify("unbind"); showMsg($("lineMsg"), "已解除綁定", "ok"); loadLine(); return; }
+    const { code } = await callNotify("bindStart");
+    const oa = encodeURIComponent(LINE_OA_ID);
+    $("lineBody").innerHTML = `
+      <p><b>步驟 1</b>　加入出勤通知官方帳號好友（已加過可跳過）</p>
+      <a class="btnlink" href="https://line.me/R/ti/p/${oa}" target="_blank" rel="noopener">加入好友</a>
+      <p style="margin-top:14px"><b>步驟 2</b>　把綁定碼傳給官方帳號（按下面按鈕會自動帶入）</p>
+      <div class="bindcode">${esc(code)}</div>
+      <a class="btnlink" href="https://line.me/R/oaMessage/${oa}/?${encodeURIComponent("綁定 " + code)}" target="_blank" rel="noopener">傳送綁定碼</a>
+      <p class="muted">綁定碼 10 分鐘內有效。用電腦的話，請在 LINE 裡搜尋 ${esc(LINE_OA_ID)} 加好友，再傳「綁定 ${esc(code)}」。</p>
+      <p style="margin-top:14px"><b>步驟 3</b>　LINE 回覆「綁定成功」後，按這裡確認</p>
+      <button type="button" class="secondary" data-line="check">我已完成，重新檢查</button>`;
+  } catch (err) { showMsg($("lineMsg"), errMsg(err), "err"); btn.disabled = false; }
+};
 
 function setMode(m) {
   mode = m;
@@ -281,11 +320,12 @@ $("btnCor").onclick = async () => {
   if (new Date(`${date}T${time}:00+08:00`) > new Date()) { showMsg(msg, "不能申請未來的時間", "err"); return; }
   $("btnCor").disabled = true;
   try {
-    await addDoc(collection(db, "corrections"), {
+    const ref = await addDoc(collection(db, "corrections"), {
       uid: me.uid, empId: me.empId, name: me.name, company: me.company,
       date, time, type: $("corType").value, reason,
       status: "pending", createdAt: serverTimestamp()
     });
+    notify("correction", ref.id);
     showMsg(msg, "已送出，等待管理員核准", "ok");
     $("corReason").value = "";
     loadCorrections();
@@ -420,12 +460,13 @@ $("btnLeave").onclick = async () => {
   $("btnLeave").disabled = true;
   try {
     const sup = me.supervisorEmpId || null;
-    await addDoc(collection(db, "requests"), {
+    const ref = await addDoc(collection(db, "requests"), {
       uid: me.uid, empId: me.empId, name: me.name, company: me.company,
       kind: "leave", ...r, hours, ym: ymOfStr(r.startDate), reason,
       supervisorEmpId: sup, status: sup ? "pending_supervisor" : "pending_admin",
       createdAt: serverTimestamp()
     });
+    notify("request", ref.id);
     showMsg(msg, sup ? "已送出，等待主管審核" : "已送出，等待管理員核准", "ok");
     $("lvReason").value = "";
     await loadRequests();
@@ -451,12 +492,13 @@ $("btnOT").onclick = async () => {
   $("btnOT").disabled = true;
   try {
     const sup = me.supervisorEmpId || null;
-    await addDoc(collection(db, "requests"), {
+    const ref = await addDoc(collection(db, "requests"), {
       uid: me.uid, empId: me.empId, name: me.name, company: me.company,
       kind: "overtime", ...r, hours, ym: ymOfStr(r.date), reason,
       supervisorEmpId: sup, status: sup ? "pending_supervisor" : "pending_admin",
       createdAt: serverTimestamp()
     });
+    notify("request", ref.id);
     showMsg(msg, sup ? "已送出，等待主管審核" : "已送出，等待管理員核准", "ok");
     $("otReason").value = "";
     await loadRequests();
@@ -537,15 +579,25 @@ $("reqList").onclick = async e => {
 // 主管審核（只有被設定為主管的人才會看到）
 // ===================================================================
 let teamReqs = [];
-async function loadReview() {
-  try {
-    const snap = await getDocs(query(collection(db, "requests"), where("supervisorEmpId", "==", me.empId)));
+let reviewUnsub = null;
+const baseTitle = document.title;
+// 即時監看：部屬一送出申請，「待我審核」的數字和頂端提醒就會馬上出現
+function watchReview() {
+  if (reviewUnsub) return;
+  reviewUnsub = onSnapshot(query(collection(db, "requests"), where("supervisorEmpId", "==", me.empId)), snap => {
     teamReqs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  } catch (e) { teamReqs = []; }
+    loadReview();
+  }, () => { teamReqs = []; loadReview(); });
+}
+function stopReviewWatch() { if (reviewUnsub) { reviewUnsub(); reviewUnsub = null; } teamReqs = []; }
+function loadReview() {
   const pending = teamReqs.filter(r => r.status === "pending_supervisor").sort((a, b) => reqSortKey(a).localeCompare(reqSortKey(b)));
   const hist = teamReqs.filter(r => r.status !== "pending_supervisor").sort((a, b) => reqSortKey(b).localeCompare(reqSortKey(a))).slice(0, 20);
   $("tabReview").classList.toggle("hidden", teamReqs.length === 0);
   $("revCount").textContent = pending.length ? `(${pending.length})` : "";
+  $("revBanner").classList.toggle("hidden", !pending.length);
+  $("revBanner").textContent = pending.length ? `🔔 有 ${pending.length} 張請假／加班申請等你審核，點這裡處理` : "";
+  document.title = pending.length ? `(${pending.length}) ${baseTitle}` : baseTitle;
   $("revList").innerHTML = pending.length ? pending.map(r => `<div class="req">
       <div class="top"><span class="title">${esc(r.name)}（${esc(r.empId)}）・${esc(reqTitle(r))}・${r.hours} 小時</span>${statusTag(r)}</div>
       <div class="meta">${esc(reqWhen(r))}</div>
@@ -560,6 +612,7 @@ async function loadReview() {
       <div class="meta">${esc(reqWhen(r))}</div>${noteLines(r)}</div>`).join("") : "尚無紀錄";
 }
 
+$("revBanner").onclick = () => $("tabReview").click();
 $("revList").onclick = async e => {
   const btn = e.target.closest("button[data-act]");
   if (!btn) return;
@@ -572,6 +625,7 @@ $("revList").onclick = async e => {
       status: btn.dataset.act === "approve" ? "pending_admin" : "rejected",
       supBy: me.empId, supAt: serverTimestamp(), supNote: note
     });
+    notify("request", r.id);
     showMsg($("revMsg"), btn.dataset.act === "approve"
       ? `已核准 ${r.name} 的申請，已送交管理員做最終核准` : `已駁回 ${r.name} 的申請`, "ok");
     loadReview();

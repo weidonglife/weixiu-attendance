@@ -140,4 +140,10 @@ th { color: var(--muted); font-weight: 600; white-space: nowrap; }
 .warnbox { background: #fdf1e3; color: #8a4b0f; border-radius: 8px; padding: 8px 10px; font-size: 14px; margin-top: 8px; }
 tr.hl td { background: #fdf1e3; }
 
+.banner { background: #fff4e5; border: 1px solid #f0c27a; color: #8a4b0f; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-weight: 600; cursor: pointer; }
+.banner:hover { background: #ffecd2; }
+.banner a { color: inherit; }
+a.btnlink { display: inline-block; background: #06c755; color: #fff; text-decoration: none; padding: 10px 16px; border-radius: 8px; font-size: 16px; }
+a.btnlink:hover { background: #05b04b; }
+.bindcode { font-family: ui-monospace, monospace; font-size: 30px; font-weight: 700; letter-spacing: .25em; color: var(--primary); margin: 6px 0 10px; }
 footer.note { text-align: center; color: var(--muted); font-size: 12px; padding: 20px 0; }

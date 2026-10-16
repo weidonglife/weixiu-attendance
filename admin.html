@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 <header class="top">
@@ -39,6 +39,7 @@
   </div>
 
   <div id="vMain" class="hidden">
+    <div id="admBanner" class="banner hidden"></div>
     <div class="tabs">
       <button data-tab="tToday" class="on">每日出勤</button>
       <button data-tab="tReport">月報表</button>
@@ -156,7 +157,7 @@
         <h2>員工列表</h2>
         <div class="table-scroll">
           <table>
-            <thead><tr><th>編號</th><th>姓名</th><th>公司</th><th>權限</th><th>身分</th><th>到職日</th><th>直屬主管</th><th>手機綁定</th><th>操作</th></tr></thead>
+            <thead><tr><th>編號</th><th>姓名</th><th>公司</th><th>權限</th><th>身分</th><th>到職日</th><th>直屬主管</th><th>手機綁定</th><th>LINE</th><th>操作</th></tr></thead>
             <tbody id="staffBody"></tbody>
           </table>
         </div>
@@ -286,6 +287,6 @@
   </div>
 </div>
 
-<script type="module" src="admin.js?v=10"></script>
+<script type="module" src="admin.js?v=11"></script>
 </body>
 </html>
