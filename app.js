@@ -470,7 +470,8 @@ $("btnLeave").onclick = async () => {
     showMsg(msg, sup ? "已送出，等待主管審核" : "已送出，等待管理員核准", "ok");
     $("lvReason").value = "";
     await loadRequests();
-    updateLeaveCalc();
+    // 送出成功後不再立刻重新檢查（否則會拿剛送出的那張比對，誤顯示「重疊」）；改日期時才會再檢查
+    $("lvCalc").textContent = ""; $("lvCalc").classList.remove("err");
   } catch (e) { showMsg(msg, errMsg(e), "err"); }
   $("btnLeave").disabled = false;
 };
@@ -502,7 +503,8 @@ $("btnOT").onclick = async () => {
     showMsg(msg, sup ? "已送出，等待主管審核" : "已送出，等待管理員核准", "ok");
     $("otReason").value = "";
     await loadRequests();
-    updateOtCalc();
+    otConfirm = false; $("btnOT").textContent = "送出加班申請";
+    $("otCalc").textContent = ""; $("otCalc").classList.remove("err");
   } catch (e) { showMsg(msg, errMsg(e), "err"); }
   $("btnOT").disabled = false;
 };
