@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=9">
-<link rel="stylesheet" href="board.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="board.css?v=10">
 </head>
 <body class="dark-page">
 <header class="top">
@@ -24,7 +24,7 @@
     <h2>登入</h2>
     <p class="muted">請用員工編號登入。登入後這個畫面會一直保持開啟、即時更新。</p>
     <label for="loginId">員工編號</label>
-    <input id="loginId" autocomplete="username" placeholder="例如 W001" autocapitalize="characters">
+    <input id="loginId" autocomplete="username" placeholder="請輸入員工編號" autocapitalize="characters">
     <label for="loginPw">密碼</label>
     <input id="loginPw" type="password" autocomplete="current-password">
     <button id="btnLogin" class="block">登入</button>
@@ -35,8 +35,8 @@
 </div>
 <div id="corner" class="corner hidden"><span id="whoCorner"></span> <button id="btnLogout2" class="small secondary" type="button">登出</button></div>
 <script type="module">
-import { auth, db, loginWithEmpId, logout, errMsg, showMsg, hideMsg } from "./common.js?v=9";
-import { startBoard } from "./board.js?v=9";
+import { auth, db, loginWithEmpId, logout, errMsg, showMsg, hideMsg } from "./common.js?v=10";
+import { startBoard } from "./board.js?v=10";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 const $ = id => document.getElementById(id);

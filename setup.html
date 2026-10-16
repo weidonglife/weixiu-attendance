@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 <header class="top"><div class="inner"><div class="brand"><img src="vmark.png" alt="WEIXIU 唯修"><h1>打卡系統 初始設定</h1></div></div></header>
@@ -25,11 +25,11 @@
     <h2>建立第一位管理員</h2>
     <p class="muted">這個頁面只能使用一次。建立完成後即自動鎖定，之後的員工帳號都從管理後台新增。</p>
     <div class="row">
-      <div><label for="sEmpId">員工編號</label><input id="sEmpId" placeholder="例如 W001" autocapitalize="characters"></div>
+      <div><label for="sEmpId">員工編號</label><input id="sEmpId" placeholder="例如 001" autocapitalize="characters"></div>
       <div><label for="sName">姓名</label><input id="sName"></div>
     </div>
-    <label for="sCompany">公司</label>
-    <input id="sCompany" readonly placeholder="依編號開頭自動帶入">
+    <label for="sCompany">公司名稱</label>
+    <select id="sCompany"></select>
     <label for="sPw1">密碼（至少 8 個字元）</label>
     <input id="sPw1" type="password" autocomplete="new-password">
     <label for="sPw2">再輸入一次</label>
@@ -38,6 +38,6 @@
     <div id="sMsg" class="msg hidden"></div>
   </div>
 </div>
-<script type="module" src="setup.js?v=9"></script>
+<script type="module" src="setup.js?v=10"></script>
 </body>
 </html>

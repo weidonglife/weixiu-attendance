@@ -8,9 +8,9 @@ import {
   computeBalances, fmtHours, LEAVE_TYPES, STATUS_INFO, ACTIVE_STATUS, OT_MONTH_LIMIT,
   reqTitle, reqWhen, reqSortKey, leaveOverlaps, fmtDateStr
   , isPart
-} from "./common.js?v=9";
+} from "./common.js?v=10";
 import { onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { startBoard } from "./board.js?v=9";
+import { startBoard } from "./board.js?v=10";
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, collection, query, where, getDocs, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";

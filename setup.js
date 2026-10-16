@@ -1,7 +1,7 @@
 // 初始設定：建立第一位管理員（只能使用一次）
 import {
-  auth, db, normEmpId, validEmpId, companyOf, makeEmail, errMsg, showMsg, checkNewPassword
-} from "./common.js?v=9";
+  auth, db, normEmpId, validEmpId, EMPID_RULE, COMPANY_LIST, esc, makeEmail, errMsg, showMsg, checkNewPassword
+} from "./common.js?v=10";
 import { createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { doc, getDoc, writeBatch, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -18,12 +18,14 @@ function show(v) { ["vLoading", "vDone", "vForm"].forEach(x => $(x).classList.to
   }
 })();
 
-$("sEmpId").oninput = () => { $("sCompany").value = companyOf(normEmpId($("sEmpId").value)); };
+$("sCompany").innerHTML = `<option value="">請選擇公司</option>` + COMPANY_LIST.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
 
 $("btnSetup").onclick = async () => {
   const msg = $("sMsg");
   const empId = normEmpId($("sEmpId").value), name = $("sName").value.trim();
-  if (!validEmpId(empId)) { showMsg(msg, "員工編號格式：W、S 或 C 開頭，加 3 位數字（例如 W001）", "err"); return; }
+  if (!validEmpId(empId)) { showMsg(msg, EMPID_RULE, "err"); return; }
+  const company = $("sCompany").value;
+  if (!company) { showMsg(msg, "請選擇公司名稱", "err"); return; }
   if (!name) { showMsg(msg, "請填寫姓名", "err"); return; }
   const bad = checkNewPassword($("sPw1").value, $("sPw2").value);
   if (bad) { showMsg(msg, bad, "err"); return; }
@@ -33,7 +35,7 @@ $("btnSetup").onclick = async () => {
     const cred = await createUserWithEmailAndPassword(auth, email, $("sPw1").value);
     const batch = writeBatch(db);
     batch.set(doc(db, "users", cred.user.uid), {
-      empId, name, company: companyOf(empId), role: "admin",
+      empId, name, company, role: "admin",
       active: true, deviceId: null, mustChangePassword: false, createdAt: serverTimestamp()
     });
     batch.set(doc(db, "logins", empId), { email, uid: cred.user.uid });

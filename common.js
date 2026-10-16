@@ -22,7 +22,9 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 
 // ===== 公司規則 =====
+// 公司名稱清單（新增員工時從這裡選；看板也依這個順序分組）
 export const COMPANIES = { W: "唯修科技", S: "唯校中心", C: "傳創機電" };
+export const COMPANY_LIST = Object.values(COMPANIES);
 export const WORK = { start: "08:00", lateAfter: "08:10", end: "17:00" };
 export const DEFAULT_RADIUS = 200; // 公尺
 // 員工身分：full 正職、part 兼職（時間不固定，只記工時）。舊資料沒有這個欄位＝正職
@@ -32,8 +34,9 @@ export const FULLTIME_YEAR_HOURS = 2080; // 正職一年的正常工時（每週
 const EMAIL_DOMAIN = "staff.weixiu-attendance.app"; // 內部用的虛擬信箱網域，不會寄信
 
 export function normEmpId(s) { return (s || "").trim().toUpperCase(); }
-export function validEmpId(s) { return /^[WSC]\d{3}$/.test(s); }
-export function companyOf(empId) { return COMPANIES[empId.charAt(0)] || ""; }
+// 員工編號：英文字母、數字，可含 - 或 _，最多 20 字（不再用開頭字母區分公司）
+export function validEmpId(s) { return /^[A-Z0-9][A-Z0-9_-]{0,19}$/.test(s); }
+export const EMPID_RULE = "員工編號只能用英文字母、數字（可含 - 或 _），最多 20 個字";
 export function makeEmail(empId) {
   // 每次建立帳號都加上獨特尾碼，重設密碼時才能換新帳號
   return `${empId.toLowerCase()}.${Date.now().toString(36)}@${EMAIL_DOMAIN}`;
@@ -42,7 +45,7 @@ export function makeEmail(empId) {
 // ===== 登入 =====
 export async function loginWithEmpId(empIdRaw, password) {
   const empId = normEmpId(empIdRaw);
-  if (!validEmpId(empId)) throw new Error("員工編號格式不正確（例如 W001）");
+  if (!validEmpId(empId)) throw new Error("員工編號不正確，請再確認一次");
   const snap = await getDoc(doc(db, "logins", empId));
   if (!snap.exists()) throw new Error("查無此員工編號");
   await signInWithEmailAndPassword(auth, snap.data().email, password);

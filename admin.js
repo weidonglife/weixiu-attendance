@@ -1,13 +1,13 @@
 // 管理後台
 import {
-  firebaseConfig, auth, db, loginWithEmpId, logout, normEmpId, validEmpId, companyOf, makeEmail,
+  firebaseConfig, auth, db, loginWithEmpId, logout, normEmpId, validEmpId, EMPID_RULE, COMPANY_LIST, makeEmail,
   fmtTime, ymOf, ymdOf, ymdToInput, inputToYmd, summarizeDay, tagsHtml, MODE_LABEL, TYPE_LABEL,
   getPosition, DEFAULT_RADIUS, esc, errMsg, showMsg, hideMsg,
   todayStr, toHolidayMap, isOffDay, offDayLabel, buildLeaveMap, computeBalances, fmtHours,
   LEAVE_LABEL, STATUS_INFO, reqTitle, reqWhen, reqSortKey,
   computeMonthReport, leaveBalanceOverview, fmtTimeSec, OT_COMP_LABEL,
   isPart, EMP_TYPE_LABEL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY
-} from "./common.js?v=9";
+} from "./common.js?v=10";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut
@@ -355,7 +355,11 @@ $("btnBackup").onclick = async () => {
 };
 
 // ===== 員工管理 =====
-$("nEmpId").oninput = () => { $("nCompany").value = companyOf(normEmpId($("nEmpId").value)); };
+// 公司名稱下拉選單
+const companyOpts = (withBlank) => (withBlank ? `<option value="">請選擇公司</option>` : "")
+  + COMPANY_LIST.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+$("nCompany").innerHTML = companyOpts(true);
+$("eCompany").innerHTML = companyOpts(false);
 
 function supOptions(excludeEmpId) {
   return `<option value="">（無，直接由管理員核准）</option>` + staff.filter(s => s.empId !== excludeEmpId)
@@ -391,6 +395,8 @@ function fillEdit() {
   if (!s) return;
   $("eName").value = s.name || "";
   $("eRole").value = s.role || "employee";
+  if (s.company && !COMPANY_LIST.includes(s.company)) $("eCompany").insertAdjacentHTML("beforeend", `<option value="${esc(s.company)}">${esc(s.company)}</option>`);
+  $("eCompany").value = s.company || COMPANY_LIST[0];
   $("eHire").value = s.hireDate || "";
   $("eSup").innerHTML = supOptions(s.empId);
   $("eSup").value = s.supervisorEmpId || "";
@@ -452,13 +458,13 @@ $("btnEdit").onclick = async () => {
   $("btnEdit").disabled = true;
   try {
     await updateDoc(doc(db, "users", s.uid), {
-      name, role: $("eRole").value,
+      name, company: $("eCompany").value, role: $("eRole").value,
       hireDate: $("eHire").value || null,
       supervisorEmpId: $("eSup").value || null,
       empType: $("eType").value,
       partAnnualHours: $("eType").value === "part" && $("ePartAnnual").value !== "" ? Math.max(0, Number($("ePartAnnual").value)) : null
     });
-    showMsg(msg, `已更新 ${name} 的資料`, "ok");
+    showMsg(msg, `已更新 ${name} 的資料` + (s.company !== $("eCompany").value ? `。公司已改為「${$("eCompany").value}」，之後的打卡會記在新公司；改之前的紀錄維持原公司。` : ""), "ok");
     await loadStaff();
   } catch (e) { showMsg(msg, errMsg(e), "err"); }
   $("btnEdit").disabled = false;
@@ -494,7 +500,9 @@ $("staffBody").onclick = async e => {
 $("btnAdd").onclick = async () => {
   const msg = $("addMsg");
   const empId = normEmpId($("nEmpId").value), name = $("nName").value.trim(), pw = $("nPw").value;
-  if (!validEmpId(empId)) { showMsg(msg, "員工編號格式：W、S 或 C 開頭，加 3 位數字（例如 W001）", "err"); return; }
+  if (!validEmpId(empId)) { showMsg(msg, EMPID_RULE, "err"); return; }
+  const company = $("nCompany").value;
+  if (!company) { showMsg(msg, "請選擇公司名稱", "err"); return; }
   if (!name) { showMsg(msg, "請填寫姓名", "err"); return; }
   if (pw.length < 8) { showMsg(msg, "初始密碼至少 8 個字元", "err"); return; }
   $("btnAdd").disabled = true;
@@ -509,7 +517,7 @@ $("btnAdd").onclick = async () => {
     await signOut(secondaryAuth);
     const batch = writeBatch(db);
     batch.set(doc(db, "users", cred.user.uid), {
-      empId, name, company: companyOf(empId), role: $("nRole").value,
+      empId, name, company, role: $("nRole").value,
       hireDate: $("nHire").value || null, supervisorEmpId: $("nSup").value || null,
       empType: $("nType").value, partAnnualHours: null,
       active: true, deviceId: null, mustChangePassword: true, createdAt: serverTimestamp()

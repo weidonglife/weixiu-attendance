@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 <header class="top">
@@ -25,7 +25,7 @@
   <div id="vLogin" class="card hidden" style="max-width:420px;margin:0 auto">
     <h2>管理員登入</h2>
     <label for="loginId">員工編號</label>
-    <input id="loginId" autocomplete="username" placeholder="例如 W001" autocapitalize="characters">
+    <input id="loginId" autocomplete="username" placeholder="請輸入員工編號" autocapitalize="characters">
     <label for="loginPw">密碼</label>
     <input id="loginPw" type="password" autocomplete="current-password">
     <button id="btnLogin" class="block">登入</button>
@@ -128,11 +128,11 @@
       <div class="card">
         <h2>新增員工</h2>
         <div class="row">
-          <div><label for="nEmpId">員工編號</label><input id="nEmpId" placeholder="W001 / S001 / C001" autocapitalize="characters"></div>
+          <div><label for="nEmpId">員工編號</label><input id="nEmpId" placeholder="例如 001、A123" autocapitalize="characters"></div>
           <div><label for="nName">姓名</label><input id="nName"></div>
         </div>
         <div class="row">
-          <div><label for="nCompany">公司</label><input id="nCompany" readonly placeholder="依編號開頭自動帶入"></div>
+          <div><label for="nCompany">公司名稱</label><select id="nCompany"></select></div>
           <div>
             <label for="nRole">權限</label>
             <select id="nRole"><option value="employee">一般員工</option><option value="admin">管理員</option></select>
@@ -147,7 +147,7 @@
             <select id="nType"><option value="full">正職</option><option value="part">兼職（時間不固定）</option></select>
           </div>
         </div>
-        <p class="muted">編號開頭：W = 唯修科技、S = 唯校中心、C = 傳創機電。員工第一次登入時會被要求改密碼。</p>
+        <p class="muted">員工編號可以自由編，用英文字母或數字都可以（例如 001、A123），公司別請用「公司名稱」選擇。員工第一次登入時會被要求改密碼。</p>
         <button id="btnAdd">新增員工</button>
         <div id="addMsg" class="msg hidden"></div>
       </div>
@@ -169,6 +169,7 @@
         <select id="eEmp"></select>
         <div class="row">
           <div><label for="eName">姓名</label><input id="eName"></div>
+          <div><label for="eCompany">公司名稱</label><select id="eCompany"></select></div>
           <div>
             <label for="eRole">權限</label>
             <select id="eRole"><option value="employee">一般員工</option><option value="admin">管理員</option></select>
@@ -285,6 +286,6 @@
   </div>
 </div>
 
-<script type="module" src="admin.js?v=9"></script>
+<script type="module" src="admin.js?v=10"></script>
 </body>
 </html>
