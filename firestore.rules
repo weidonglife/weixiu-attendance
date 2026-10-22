@@ -18,6 +18,11 @@ service cloud.firestore {
     function tw() { return request.time + duration.value(8, 'h'); }
     function ymNow() { return tw().year() * 100 + tw().month(); }
     function ymdNow() { return ymNow() * 100 + tw().day(); }
+    // n 天後的台灣日期（例如 20261122）
+    function ymdIn(n) {
+      let t = request.time + duration.value(8, 'h') + duration.value(n, 'd');
+      return (t.year() * 100 + t.month()) * 100 + t.day();
+    }
 
     function bootstrapPending() {
       return !exists(/databases/$(database)/documents/settings/bootstrap)
@@ -164,6 +169,32 @@ service cloud.firestore {
                 || (resource != null && 'outAt' in resource.data && request.resource.data.outAt == resource.data.outAt)));
       allow delete: if isAdmin();
     }
+    // ===== 兼職上班預告：兼職自己登記未來 31 天內哪天會來 =====
+    // 每人每天一筆（文件編號＝日期_員工編號），只能登記今天以後；過去的預告不能改或刪
+    match /shifts/{id} {
+      allow get, list: if isActive();
+      allow create, update: if isAdmin()
+        || (isActive() && me().empType == 'part'
+            && request.resource.data.keys().hasOnly(['uid', 'empId', 'name', 'company', 'date', 'ymd', 'start', 'end', 'updatedAt'])
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.empId == me().empId
+            && request.resource.data.name == me().name
+            && request.resource.data.company == me().company
+            && id == request.resource.data.date + '_' + me().empId
+            && request.resource.data.date is string
+            && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+            && request.resource.data.date.replace('-', '') == string(request.resource.data.ymd)
+            && request.resource.data.ymd >= ymdNow()
+            && request.resource.data.ymd <= ymdIn(31)
+            && request.resource.data.start is string && request.resource.data.start.matches('^[0-2][0-9]:[0-5][0-9]$')
+            && request.resource.data.end is string && request.resource.data.end.matches('^[0-2][0-9]:[0-5][0-9]$')
+            && request.resource.data.start < request.resource.data.end
+            && request.resource.data.updatedAt == request.time
+            && (resource == null || (resource.data.empId == me().empId && resource.data.ymd >= ymdNow())));
+      allow delete: if isAdmin()
+        || (isActive() && resource.data.empId == me().empId && resource.data.ymd >= ymdNow());
+    }
+
     // 請假時段（只有日期與時間，由管理後台依已核准假單自動同步）
     match /leaveBoard/{id} {
       allow get, list: if isActive();

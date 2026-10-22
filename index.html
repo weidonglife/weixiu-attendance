@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=16">
-<link rel="stylesheet" href="board.css?v=16">
+<link rel="stylesheet" href="style.css?v=17">
+<link rel="stylesheet" href="board.css?v=17">
 </head>
 <body>
 <header class="top">
@@ -87,6 +87,21 @@
       </div>
       <div id="punchMsg" class="msg hidden"></div>
       <p class="muted">打卡時間以伺服器時間為準，會同時記錄 GPS 位置。</p>
+    </div>
+
+    <!-- 兼職：上班預告 -->
+    <div id="shiftCard" class="card hidden">
+      <h2>我的上班預告</h2>
+      <p class="muted" style="margin-top:-6px">預計要來上班的日子請先登記，主管和管理員就會知道你哪天會來。行程有變請記得取消或修改。</p>
+      <div class="row">
+        <div><label for="shDate">日期</label><input id="shDate" type="date"></div>
+        <div><label for="shStart">開始</label><select id="shStart"></select></div>
+        <div><label for="shEnd">結束</label><select id="shEnd"></select></div>
+      </div>
+      <button id="btnShift" class="block">登記</button>
+      <div id="shiftMsg" class="msg hidden"></div>
+      <h2 style="margin-top:18px">已登記</h2>
+      <div id="shiftList" class="muted">尚未登記</div>
     </div>
 
     <div class="card">
@@ -206,6 +221,6 @@
   <footer class="note">唯修科技 · 傳創機電 · 唯校中心</footer>
 </div>
 
-<script type="module" src="app.js?v=16"></script>
+<script type="module" src="app.js?v=17"></script>
 </body>
 </html>

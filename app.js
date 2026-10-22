@@ -7,12 +7,12 @@ import {
   todayStr, ymOfStr, toHolidayMap, isOffDay, offDayLabel, buildLeaveMap, calcLeaveHours, calcOtHours,
   computeBalances, fmtHours, LEAVE_TYPES, STATUS_INFO, ACTIVE_STATUS, OT_MONTH_LIMIT,
   reqTitle, reqWhen, reqSortKey, leaveOverlaps, fmtDateStr
-  , isPart, notify, callNotify, NOTIFY_URL, LINE_OA_ID
-} from "./common.js?v=16";
+  , isPart, notify, callNotify, NOTIFY_URL, LINE_OA_ID, addDays
+} from "./common.js?v=17";
 import { onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { startBoard } from "./board.js?v=16";
+import { startBoard } from "./board.js?v=17";
 import {
-  doc, getDoc, setDoc, updateDoc, addDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot
+  doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $ = id => document.getElementById(id);
@@ -133,7 +133,77 @@ async function initMain() {
   loadMonth();
   watchReview();
   loadLine();
+  initShifts();
 }
+
+// ===== 兼職：上班預告 =====
+let myShifts = [];
+let shiftReady = false;
+function timeOptions(sel, def) {
+  const opts = [];
+  for (let m = 6 * 60; m <= 22 * 60; m += 30) {
+    const t = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+    opts.push(`<option value="${t}"${t === def ? " selected" : ""}>${t}</option>`);
+  }
+  sel.innerHTML = opts.join("");
+}
+function initShifts() {
+  $("shiftCard").classList.toggle("hidden", !isPart(me));
+  if (!isPart(me)) return;
+  if (!shiftReady) {
+    timeOptions($("shStart"), "08:00");
+    timeOptions($("shEnd"), "17:00");
+    shiftReady = true;
+  }
+  const t = todayStr();
+  $("shDate").min = t;
+  $("shDate").max = addDays(t, 30);
+  if (!$("shDate").value || $("shDate").value < t) $("shDate").value = addDays(t, 1);
+  loadShifts();
+}
+async function loadShifts() {
+  try {
+    const snap = await getDocs(query(collection(db, "shifts"), where("empId", "==", me.empId)));
+    const t = todayStr();
+    myShifts = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.date >= t).sort((a, b) => a.date.localeCompare(b.date));
+    $("shiftList").innerHTML = myShifts.length ? myShifts.map(x => `<div class="req"><div class="top">
+        <span class="title">${esc(fmtDateStr(x.date))}　${esc(x.start)}–${esc(x.end)}</span>
+        <button class="small secondary" type="button" data-unshift="${esc(x.id)}">取消</button></div></div>`).join("")
+      : "尚未登記";
+  } catch (e) { $("shiftList").textContent = errMsg(e); }
+}
+$("btnShift").onclick = async () => {
+  const msg = $("shiftMsg");
+  const date = $("shDate").value, start = $("shStart").value, end = $("shEnd").value;
+  const t = todayStr();
+  if (!date) { showMsg(msg, "請選擇日期", "err"); return; }
+  if (date < t || date > addDays(t, 30)) { showMsg(msg, "只能登記今天到 30 天內的日子", "err"); return; }
+  if (end <= start) { showMsg(msg, "結束時間要晚於開始時間", "err"); return; }
+  const id = `${date}_${me.empId}`;
+  const existed = myShifts.some(x => x.id === id);
+  $("btnShift").disabled = true;
+  try {
+    await setDoc(doc(db, "shifts", id), {
+      uid: me.uid, empId: me.empId, name: me.name, company: me.company,
+      date, ymd: Number(date.replace(/-/g, "")), start, end, updatedAt: serverTimestamp()
+    });
+    showMsg(msg, `${existed ? "已更新" : "已登記"}：${fmtDateStr(date)} ${start}–${end}`, "ok");
+    $("shDate").value = addDays(date, 1) <= addDays(t, 30) ? addDays(date, 1) : date;
+    await loadShifts();
+  } catch (e) { showMsg(msg, errMsg(e), "err"); }
+  $("btnShift").disabled = false;
+};
+$("shiftList").onclick = async e => {
+  const btn = e.target.closest("button[data-unshift]");
+  if (!btn) return;
+  if (!btn.dataset.confirm) { btn.dataset.confirm = "1"; btn.textContent = "確定取消？"; return; }
+  btn.disabled = true;
+  try {
+    await deleteDoc(doc(db, "shifts", btn.dataset.unshift));
+    showMsg($("shiftMsg"), "已取消這天的預告", "ok");
+    await loadShifts();
+  } catch (err) { showMsg($("shiftMsg"), errMsg(err), "err"); btn.disabled = false; }
+};
 
 // ===== LINE 通知綁定 =====
 async function loadLine() {

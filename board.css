@@ -366,6 +366,12 @@
 .board.t-light .p-rest { opacity: .55; }
 .board.t-light .b-card { background: #fff; }
 .board.t-light .b-off { background: #e8f3fb; color: #0f5d93; border-color: #b9dcf3; }
+.board .b-tmr { margin-top: 14px; padding: 8px 12px; border-radius: 8px; background: rgba(125,194,66,.10); border: 1px solid rgba(125,194,66,.35); color: #d6efc0; font-size: 14px; line-height: 1.9; }
+.board .b-tmr b { margin-right: 6px; }
+.board .b-tmr .tmr-p { display: inline-block; margin-right: 14px; white-space: nowrap; }
+.board .b-tmr .muted-in { opacity: .75; }
+.board.t-light .b-tmr { background: #eef7e6; color: #3d6b1c; border-color: #cfe6bb; }
+.board.big .b-tmr { font-size: 16px; }
 .board.t-light .b-empty { border-color: #cfdbe4; }
 .board.t-light .b-foot { border-top-color: #cfdbe4; }
 .board.t-light .lg.none i { border-color: #9fb4c3; }

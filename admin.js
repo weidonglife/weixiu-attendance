@@ -7,7 +7,7 @@ import {
   LEAVE_LABEL, STATUS_INFO, reqTitle, reqWhen, reqSortKey,
   computeMonthReport, leaveBalanceOverview, fmtTimeSec, OT_COMP_LABEL,
   isPart, EMP_TYPE_LABEL, notify, callNotify, NOTIFY_URL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY
-} from "./common.js?v=16";
+} from "./common.js?v=17";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut
@@ -133,7 +133,13 @@ async function loadDay() {
   try {
     const ds = $("dayPick").value;
     const ymd = inputToYmd(ds);
-    const snap = await getDocs(query(collection(db, "punches"), where("ymd", "==", ymd)));
+    const [snap, shSnap] = await Promise.all([
+      getDocs(query(collection(db, "punches"), where("ymd", "==", ymd))),
+      getDocs(query(collection(db, "shifts"), where("date", "==", ds)))
+    ]);
+    const shiftOf = {};
+    shSnap.docs.forEach(d => { const v = d.data(); shiftOf[v.empId] = v; });
+    const nowMin = (() => { const [h, m] = fmtTime(new Date()).split(":").map(Number); return h * 60 + m; })();
     const byEmp = {};
     snap.docs.forEach(d => {
       const p = { ...d.data(), ts: d.data().ts.toDate() };
@@ -153,7 +159,13 @@ async function loadDay() {
       const nameCell = `<td>${esc(s.name)}${isPart(s) ? ' <span class="tag gray">兼職</span>' : ""}<br><span class="muted">${esc(s.empId)}</span></td><td>${esc(s.company)}</td>`;
       if (!list.length) {
         let tags;
-        if (off) tags = [["gray", off]];
+        if (isPart(s) && shiftOf[s.empId]) {
+          const sh = shiftOf[s.empId];
+          const [h, m] = sh.start.split(":").map(Number);
+          const late = isToday ? nowMin > h * 60 + m + 10 : ds < todayStr(); // 未來日期不算未打卡
+          tags = [[late ? "warn" : "gray", `預計 ${sh.start}–${sh.end}${late ? " 未打卡" : ""}`]];
+        }
+        else if (off) tags = [["gray", off]];
         else if (isPart(s) && !wins.length) tags = [["gray", "兼職・未上班"]];
         else {
           const sum = summarizeDay([], wins);
@@ -165,6 +177,7 @@ async function loadDay() {
       const sum = summarizeDay(list, wins, isPart(s));
       let tags = isToday ? sum.tags.filter(t => t[1] !== "未打下班卡" && t[1] !== "早退") : sum.tags;
       if (off) tags = [["gray", off]].concat(tags.filter(t => !["未打上班卡", "未打下班卡", "遲到", "早退", "正常"].includes(t[1])));
+      if (isPart(s) && shiftOf[s.empId]) tags = tags.concat([["field", `預告 ${shiftOf[s.empId].start}–${shiftOf[s.empId].end}`]]);
       const detail = list.map(p => {
         const where_ = p.mode === "field" ? `：${esc(p.customer)}` : p.distance != null ? `（${p.distance} m）` : "";
         const map = p.lat != null ? ` <a href="https://www.google.com/maps?q=${p.lat},${p.lng}" target="_blank" rel="noopener">地圖</a>` : "";

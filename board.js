@@ -2,8 +2,8 @@
 // 只讀取精簡資料：presence（今日動態）、leaveBoard（請假時段，不含假別與事由）、settings/directory（員工名單）
 import {
   db, fmtTime, fmtTimeSec, fmtDateLong, todayStr, ymdOf, toHolidayMap, offDayLabel,
-  leaveDaySegments, summarizeDay, esc, COMPANIES
-} from "./common.js?v=16";
+  leaveDaySegments, summarizeDay, esc, COMPANIES, addDays, fmtDateStr
+} from "./common.js?v=17";
 import {
   collection, query, where, onSnapshot, doc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -53,6 +53,7 @@ export function startBoard(root, { big = false } = {}) {
         </div>
       </div>
       <div data-r="sections"></div>
+      <div class="b-tmr hidden" data-r="tomorrow"></div>
       <footer class="b-foot">
         <span class="live" aria-hidden="true"></span><span data-r="updated">連線中…</span>
         <span class="b-note">有人打卡會即時更新，另每 2 分鐘重新讀取一次。請假只顯示時段，不顯示假別。</span>
@@ -61,6 +62,7 @@ export function startBoard(root, { big = false } = {}) {
   const $r = k => root.querySelector(`[data-r="${k}"]`);
 
   let directory = [], holidays = new Map(), presence = {}, leaveDocs = [], filter = "";
+  let shifts = {}, shiftsTmr = []; // 兼職上班預告：今天（empId → 預告）、明天（清單）
   let view = "plates";
   let theme = "t-bright";
   try { theme = localStorage.getItem("wx_board_theme") || theme; } catch (e) { /* 無痕模式 */ }
@@ -100,7 +102,7 @@ export function startBoard(root, { big = false } = {}) {
 
   function subscribe() {
     unsubs.splice(0).forEach(u => u());
-    presence = {}; leaveDocs = [];
+    presence = {}; leaveDocs = []; shifts = {}; shiftsTmr = [];
     const onErr = e => { $r("sections").innerHTML = `<div class="msg err">無法讀取資料：${esc(e.message || e.code)}</div>`; };
     unsubs.push(onSnapshot(doc(db, "settings", "directory"), s => { directory = s.exists() ? s.data().list || [] : []; render(); }, onErr));
     unsubs.push(onSnapshot(doc(db, "settings", "holidays"), s => { holidays = toHolidayMap(s.exists() ? s.data().list : []); render(); }, onErr));
@@ -110,6 +112,12 @@ export function startBoard(root, { big = false } = {}) {
       lastUpdated = new Date();
       render();
     }, onErr));
+    const tmr = addDays(today, 1);
+    unsubs.push(onSnapshot(query(collection(db, "shifts"), where("date", "in", [today, tmr])), s => {
+      shifts = {}; shiftsTmr = [];
+      s.docs.forEach(d => { const v = d.data(); if (v.date === today) shifts[v.empId] = v; else shiftsTmr.push(v); });
+      render();
+    }, () => { shifts = {}; shiftsTmr = []; }));
     unsubs.push(onSnapshot(query(collection(db, "leaveBoard"), where("endDate", ">=", today)), s => {
       leaveDocs = s.docs.map(d => d.data());
       render();
@@ -138,8 +146,14 @@ export function startBoard(root, { big = false } = {}) {
       sub = st === "field" ? `${esc(pr.customer || "外勤")}・${inAt ? fmtTime(inAt) : ""}` : `${inAt ? fmtTime(inAt) : ""} 上班`;
     } else if (wins.length && workday) {
       st = "leave"; sub = `請假 ${leaveTxt}`;
+    } else if (part && shifts[p.empId]) {
+      // 兼職有登記今天的上班預告：過了預計時間 10 分鐘還沒打卡就算未到
+      const sh = shifts[p.empId];
+      const [h, m] = sh.start.split(":").map(Number);
+      const overdue = nowMin > h * 60 + m + GRACE;
+      return { st: "none", sub: `${overdue ? "未到" : "預計上班"}（${sh.start}–${sh.end}）`, tags: [], overdue, expected: true, shift: sh };
     } else if (part) {
-      // 兼職時間不固定：沒打卡＝今天沒來，不算未到
+      // 兼職時間不固定、也沒登記預告：沒打卡＝今天沒來，不算未到
       return { st: "none", sub: "今日未上班", tags: [], overdue: false, idle: true };
     } else {
       st = "none";
@@ -170,7 +184,7 @@ export function startBoard(root, { big = false } = {}) {
     let idle = 0;
     for (const p of people) {
       const s = statusOf(p, nowMin, workday);
-      if ((!workday || s.idle) && s.st === "none") { if (s.idle) idle++; continue; }
+      if (s.st === "none" && (s.idle || (!workday && !s.expected))) { if (s.idle) idle++; continue; }
       groups[s.st].push({ p, s });
     }
     const counted = people.length - idle; // 兼職今天沒來的不列入應到人數
@@ -183,6 +197,7 @@ export function startBoard(root, { big = false } = {}) {
       + readout(groups.leave.length, "請假", "c-leave") // 假日也顯示（假日不算請假，會是 0）
       + (workday ? readout(overdue, "未到", overdue ? "c-late" : "c-zero") : "");
     renderGauge(groups, counted, workday, overdue);
+    renderTomorrow();
 
     if (view === "plates") {
       renderPlates(people, nowMin, workday);
@@ -205,6 +220,19 @@ export function startBoard(root, { big = false } = {}) {
         }).join("") : `<div class="b-empty sm">無</div>`}</div></section>`;
     }).join("");
     if (!directory.length) $r("sections").innerHTML = `<div class="b-empty">員工名單尚未建立。請管理員打開一次管理後台，名單就會自動建立。</div>`;
+  }
+
+  // 明天兼職預計上班（有兼職人員時才顯示）
+  function renderTomorrow() {
+    const parts = directory.filter(p => p.empType === "part" && (!filter || p.company === filter));
+    const el = $r("tomorrow");
+    if (!parts.length) { el.classList.add("hidden"); return; }
+    const ids = new Set(parts.map(p => p.empId));
+    const list = shiftsTmr.filter(x => ids.has(x.empId)).sort((a, b) => a.start.localeCompare(b.start) || a.empId.localeCompare(b.empId));
+    const tmr = addDays(today, 1);
+    el.classList.remove("hidden");
+    el.innerHTML = `<b>明天 ${esc(fmtDateStr(tmr))} 兼職預計上班：</b>`
+      + (list.length ? list.map(x => `<span class="tmr-p">${esc(x.name)} ${esc(x.start)}–${esc(x.end)}</span>`).join("") : `<span class="muted-in">目前沒有人登記</span>`);
   }
 
   // 出勤量尺：像校驗用的刻度尺，依狀態分段上色，游標指在「已到」人數
@@ -243,8 +271,8 @@ export function startBoard(root, { big = false } = {}) {
         <h3 class="rack-h"><span class="co ${COMPANY_CLASS[co] || ""}"></span>${esc(co)}<span class="rack-n">${list.length} 人</span><span class="rule" aria-hidden="true"></span></h3>
         <div class="plates">${list.map(p => {
           const s = statusOf(p, nowMin, workday);
-          const cls = s.overdue ? "late" : ((!workday || s.idle) && s.st === "none" ? "rest" : s.st);
-          const label = s.overdue ? "未到" : (s.idle ? "未上班" : !workday && s.st === "none" ? "休假日" : PLATE_LABEL[s.st]);
+          const cls = s.overdue ? "late" : (s.st === "none" && (s.idle || (!workday && !s.expected)) ? "rest" : s.st);
+          const label = s.overdue ? "未到" : (s.idle ? "未上班" : s.expected ? "預計上班" : !workday && s.st === "none" ? "休假日" : PLATE_LABEL[s.st]);
           const changed = prevStatus[p.empId] && prevStatus[p.empId] !== s.st;
           prevStatus[p.empId] = s.st;
           const pr = presence[p.empId] || {};
@@ -257,6 +285,7 @@ export function startBoard(root, { big = false } = {}) {
           else if (s.st === "field") detail = `${esc(pr.customer || "")}${tIn ? "　" + tIn : ""}`;
           else if (s.st === "off") detail = `${tIn}–${tOut}`;
           else if (s.idle) detail = "時間不固定";
+          else if (s.expected) detail = `${esc(s.shift.start)}–${esc(s.shift.end)}`;
           else if (s.st === "leave") detail = s.sub.replace(/^請假\s*/, "");
           else if (s.sub.includes("請假")) detail = s.sub.replace(/^(未到|尚未打卡)/, "").replace(/[（）]/g, "");
           return `<div class="plate p-${cls}${late ? " is-late" : ""}${changed ? " pop" : ""}" title="${esc(p.name)} ${label}">
