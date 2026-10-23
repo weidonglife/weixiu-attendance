@@ -2,8 +2,8 @@
 // 只讀取精簡資料：presence（今日動態）、leaveBoard（請假時段，不含假別與事由）、settings/directory（員工名單）
 import {
   db, fmtTime, fmtTimeSec, fmtDateLong, todayStr, ymdOf, toHolidayMap, offDayLabel,
-  leaveDaySegments, summarizeDay, esc, COMPANIES, addDays, fmtDateStr
-} from "./common.js?v=17";
+  leaveDaySegments, summarizeDay, esc, COMPANIES, addDays, fmtDateStr, closureOf, closureWins, closureText
+} from "./common.js?v=18";
 import {
   collection, query, where, onSnapshot, doc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -134,7 +134,7 @@ export function startBoard(root, { big = false } = {}) {
     const inAt = pr && pr.inAt ? pr.inAt.toDate() : null;
     const outAt = pr && pr.outAt ? pr.outAt.toDate() : null;
     const part = p.empType === "part";
-    const sum = summarizeDay(inAt ? [{ type: "in", ts: inAt }] : [], workday ? wins : [], part);
+    const sum = summarizeDay(inAt ? [{ type: "in", ts: inAt }] : [], workday ? wins.concat(closureWins(today, holidays)) : [], part);
     const leaveTxt = wins.length ? (sum.fullLeave ? "全天" : wins.map(w => `${hh(w.s)}–${hh(w.e)}`).join("、")) : "";
     const toMin = d => { const [h, m] = fmtTime(d).split(":").map(Number); return h * 60 + m; };
     const late = !!(!part && workday && inAt && toMin(inAt) > sum.effStart * 60 + GRACE);
@@ -158,12 +158,12 @@ export function startBoard(root, { big = false } = {}) {
     } else {
       st = "none";
       const shouldBe = sum.effStart * 60 + GRACE;
-      sub = workday && nowMin > shouldBe ? "未到" : "尚未打卡";
+      sub = sum.effStart >= sum.effEnd ? "今日停班" : workday && nowMin > shouldBe ? "未到" : "尚未打卡";
       if (wins.length) sub += `（請假 ${leaveTxt}）`;
     }
     if (late && (st === "in" || st === "field" || st === "off")) tags.push(["late", "遲到"]);
     if (wins.length && st !== "leave" && st !== "none") tags.push(["field", `請假 ${leaveTxt}`]);
-    return { st, sub, tags, overdue: st === "none" && workday && nowMin > sum.effStart * 60 + GRACE };
+    return { st, sub, tags, overdue: st === "none" && workday && sum.effStart < sum.effEnd && nowMin > sum.effStart * 60 + GRACE };
   }
 
   const SECTIONS = [
@@ -176,8 +176,10 @@ export function startBoard(root, { big = false } = {}) {
     const nowMin = nowParts[0] * 60 + nowParts[1];
     const offLabel = offDayLabel(today, holidays);
     const workday = !offLabel;
-    $r("off").classList.toggle("hidden", workday);
-    $r("off").textContent = workday ? "" : `今天是${offLabel === "假日" ? "週末假日" : offLabel}，以下只列出有打卡的同仁。`;
+    const closure = workday ? closureOf(today, holidays) : null;
+    $r("off").classList.toggle("hidden", workday && !closure);
+    $r("off").textContent = !workday ? `今天是${offLabel === "假日" ? "週末假日" : offLabel}，以下只列出有打卡的同仁。`
+      : closure ? `⛈ 今天 ${closureText(closure)}，停班時段不算遲到或早退。` : "";
 
     const people = directory.filter(p => !filter || p.company === filter);
     const groups = { in: [], field: [], leave: [], none: [], off: [] };

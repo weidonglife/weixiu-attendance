@@ -134,14 +134,19 @@ export function summarizeDay(list, wins = [], part = false) {
     if (effStart >= 12 && effStart < 13) { effStart = 13; changed = true; }
     if (effEnd > 12 && effEnd <= 13) { effEnd = 12; changed = true; }
   }
-  const fullLeave = wins.length > 0 && effStart >= effEnd;
-  const leaveHours = wins.reduce((a, w) => a + w.hours, 0);
+  const realWins = wins.filter(w => !w.off); // 停班時段不算請假
+  const offWin = wins.find(w => w.off);
+  const fullLeave = realWins.length > 0 && effStart >= effEnd;
+  const closedAll = !realWins.length && !!offWin && effStart >= effEnd; // 剩下的上班時間全部停班
+  const leaveHours = realWins.reduce((a, w) => a + w.hours, 0);
 
   const tags = [];
-  if (part) {
+  if (closedAll && !list.length) {
+    tags.push(["gray", offWin.name]);
+  } else if (part) {
     if (list.length && !firstIn) tags.push(["warn", "未打上班卡"]);
     if (list.length && !lastOut) tags.push(["warn", "未打下班卡"]);
-    if (wins.length) tags.push(["field", `請假 ${leaveHours}h`]);
+    if (realWins.length) tags.push(["field", `請假 ${leaveHours}h`]);
   } else if (fullLeave) {
     tags.push(["field", "請假"]);
   } else {
@@ -149,12 +154,13 @@ export function summarizeDay(list, wins = [], part = false) {
     else if (toMin(fmtTime(firstIn.ts)) > effStart * 60 + GRACE_MIN) tags.push(["late", "遲到"]);
     if (!lastOut) tags.push(["warn", "未打下班卡"]);
     else if (toMin(fmtTime(lastOut.ts)) < effEnd * 60) tags.push(["late", "早退"]);
-    if (wins.length) tags.push(["field", `請假 ${leaveHours}h`]);
+    if (realWins.length) tags.push(["field", `請假 ${leaveHours}h`]);
   }
+  if (offWin && !closedAll) tags.push(["gray", closureText(offWin)]);
   if (sorted.some(p => p.mode === "field")) tags.push(["field", "外勤"]);
   if (sorted.some(p => p.mode === "correction")) tags.push(["gray", "含補打卡"]);
-  if ((part ? list.length > 0 : !fullLeave) && !tags.some(t => t[0] === "late" || t[0] === "warn")) tags.unshift(["ok", "正常"]);
-  return { firstIn, lastOut, tags, fullLeave, leaveHours, effStart, effEnd };
+  if ((part ? list.length > 0 : !fullLeave && !(closedAll && !list.length)) && !tags.some(t => t[0] === "late" || t[0] === "warn")) tags.unshift(["ok", "正常"]);
+  return { firstIn, lastOut, tags, fullLeave, closedAll, leaveHours, effStart, effEnd };
 }
 export function tagsHtml(tags) {
   return tags.map(([cls, text]) => `<span class="tag ${cls}">${esc(text)}</span>`).join(" ");
@@ -184,7 +190,23 @@ export function fmtDateStr(s) { return `${s.slice(5, 7)}/${s.slice(8, 10)}（${W
 
 // ===== 假日 =====
 // holidays：Map(日期 → 名稱)
-export function toHolidayMap(list) { return new Map((list || []).map(h => [h.date, h.name || "國定假日"])); }
+// 假日清單 → Map（日期 → 名稱，只含整天放假）；半天停班（有 from、to 整點）另外放在 .partial
+export function toHolidayMap(list) {
+  const all = list || [];
+  const m = new Map(all.filter(h => h.from == null).map(h => [h.date, h.name || "國定假日"]));
+  m.partial = new Map(all.filter(h => h.from != null).map(h => [h.date, { s: Number(h.from), e: Number(h.to), name: h.name || "停班" }]));
+  return m;
+}
+// 半天停班（例如颱風下午停班）：回傳 {s, e, name} 或 null
+export function closureOf(s, holidays) {
+  return (holidays && holidays.partial && holidays.partial.get(s)) || null;
+}
+// 給 summarizeDay 用的停班時段（當成「不用上班」的時段，但不算請假）
+export function closureWins(s, holidays) {
+  const c = closureOf(s, holidays);
+  return c ? [{ s: c.s, e: c.e, hours: 0, off: true, name: c.name }] : [];
+}
+export function closureText(c) { return c ? `${String(c.s).padStart(2, "0")}:00–${String(c.e).padStart(2, "0")}:00 ${c.name}` : ""; }
 // 名稱含「補班」的日期視為上班日（例如週六補班）
 export function isMakeupDay(s, holidays) {
   return !!(holidays && holidays.has(s) && String(holidays.get(s)).includes("補班"));
@@ -243,7 +265,8 @@ export function leaveDaySegments(r, holidays) {
     if (isOffDay(d, holidays)) continue;
     const s = d === r.startDate ? r.startHour : 8;
     const e = d === r.endDate ? r.endHour : 17;
-    const h = overlapWork(s, e);
+    const c = closureOf(d, holidays); // 停班時段不用請假
+    const h = overlapWork(s, e) - (c ? overlapWork(Math.max(s, c.s), Math.min(e, c.e)) : 0);
     if (h > 0) out.push({ date: d, s, e, hours: h });
   }
   return out;
@@ -380,7 +403,7 @@ export function computeMonthReport({ ym, staff, punches, leaves, monthReqs, holi
       if ((off || beforeHire) && !list.length) continue;
       if (person.part && !list.length && !wins.length) continue; // 兼職沒來上班的日子不列入
 
-      const sum = summarizeDay(list, off ? [] : wins, person.part);
+      const sum = summarizeDay(list, off ? [] : wins.concat(closureWins(ds, holidays)), person.part);
       const row = {
         date: ds, weekday: WEEK[weekdayOf(ds)], empId: person.empId, name: person.name, company: person.company,
         firstIn: sum.firstIn ? fmtTime(sum.firstIn.ts) : "", lastOut: sum.lastOut ? fmtTime(sum.lastOut.ts) : "",
@@ -400,6 +423,7 @@ export function computeMonthReport({ ym, staff, punches, leaves, monthReqs, holi
       } else {
         S.workdays++;
         if (sum.fullLeave) { S.fullLeaveDays++; row.status = "請假"; }
+        else if (!list.length && sum.closedAll) { row.status = sum.tags[0][1]; }
         else if (!list.length && person.part) { row.status = `請假 ${sum.leaveHours}h`; }
         else if (!list.length) { S.absent++; row.status = "未打卡"; row.issues.push("整天未打卡"); }
         else {

@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=17">
+<link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
 <header class="top">
@@ -48,7 +48,7 @@
       <button data-tab="tReq">請假／加班審核 <span id="reqCount"></span></button>
       <button data-tab="tRec">請假／加班紀錄</button>
       <button data-tab="tOffice">公司位置</button>
-      <button data-tab="tHol">國定假日</button>
+      <button data-tab="tHol">國定假日／公司休假</button>
       <a class="tablink" href="board.html" target="_blank" rel="noopener">開啟今日出勤看板（新視窗）</a>
       <button class="secondary btnLogout" style="margin-left:auto">登出</button>
     </div>
@@ -252,9 +252,12 @@
 
     <!-- 國定假日 -->
     <section id="tHol" class="card hidden">
-      <h2>國定假日設定</h2>
-      <p class="muted">每行一天，格式：<code>2026-12-25 行憲紀念日</code>。設定後，請假時數會自動扣除這些日子，出勤表也不會把這些日子算成未打卡。週六、週日已自動視為假日，不用填。<br>
+      <h2>國定假日／公司休假</h2>
+      <p class="muted">每行一天。設定後，請假時數會自動扣除這些時間，出勤表也不會算成未打卡、遲到或早退。週六、週日已自動視為假日，不用填。<br>
+        <b>整天放假</b>（國定假日、颱風假、公司公休）：<code>2026-12-25 行憲紀念日</code>、<code>2026-10-23 颱風假</code>、<code>2026-12-31 公司公休</code><br>
+        <b>半天停班</b>（例如颱風下午停班）：<code>2026-10-23 13:00-17:00 颱風停班</code>，或簡寫 <code>2026-10-23 13:00起 颱風停班</code>（停到 17:00）。上午停班、下午上班：<code>2026-10-23 08:00-12:00 颱風停班</code>。時間請用整點。<br>
         <b>補班日</b>：名稱寫「補班」即可，例如 <code>2027-02-20 補班</code>，那天就會當成一般上班日。<br>
+        當天臨時宣布也來得及：存檔後看板會立刻更新。<br>
         <b>自動匯入</b>：選年度後按「從政府行事曆自動匯入」，會帶入行政院人事行政總處公告的放假日與補班日（只帶入平日放假和週末補班）。匯入後請檢查一下，再按「儲存」。</p>
       <div class="row" style="align-items:flex-end;margin-bottom:10px">
         <div style="max-width:140px"><label for="holYear">年度</label><input id="holYear" type="number" min="2020" max="2100"></div>
@@ -287,6 +290,6 @@
   </div>
 </div>
 
-<script type="module" src="admin.js?v=17"></script>
+<script type="module" src="admin.js?v=18"></script>
 </body>
 </html>

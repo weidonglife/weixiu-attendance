@@ -6,8 +6,8 @@ import {
   todayStr, toHolidayMap, isOffDay, offDayLabel, buildLeaveMap, computeBalances, fmtHours,
   LEAVE_LABEL, STATUS_INFO, reqTitle, reqWhen, reqSortKey,
   computeMonthReport, leaveBalanceOverview, fmtTimeSec, OT_COMP_LABEL,
-  isPart, EMP_TYPE_LABEL, notify, callNotify, NOTIFY_URL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY
-} from "./common.js?v=17";
+  isPart, EMP_TYPE_LABEL, closureWins, closureOf, closureText, notify, callNotify, NOTIFY_URL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY
+} from "./common.js?v=18";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut
@@ -79,7 +79,7 @@ async function loadHolidays() {
   const snap = await getDoc(doc(db, "settings", "holidays"));
   const list = snap.exists() ? snap.data().list || [] : [];
   holidays = toHolidayMap(list);
-  $("holText").value = list.map(h => `${h.date} ${h.name || ""}`.trim()).join("\n");
+  $("holText").value = list.map(holLine).join("\n");
   holYearHint(list);
 }
 // 今年或明年（10 月起）還沒設定假日時，提醒管理員匯入
@@ -168,13 +168,13 @@ async function loadDay() {
         else if (off) tags = [["gray", off]];
         else if (isPart(s) && !wins.length) tags = [["gray", "兼職・未上班"]];
         else {
-          const sum = summarizeDay([], wins);
-          if (sum.fullLeave) tags = sum.tags;
-          else tags = [["warn", isToday ? "尚未打卡" : "未打卡"]].concat(wins.length ? [["field", `請假 ${sum.leaveHours}h`]] : []);
+          const sum = summarizeDay([], wins.concat(closureWins(ds, holidays)));
+          if (sum.fullLeave || sum.closedAll) tags = sum.tags;
+          else tags = [["warn", isToday ? "尚未打卡" : "未打卡"]].concat(wins.length ? [["field", `請假 ${sum.leaveHours}h`]] : []).concat(sum.tags.filter(t => t[0] === "gray"));
         }
         return `<tr>${nameCell}<td>—</td><td>—</td><td>${tagsHtml(tags)}</td><td>${leaveTxt}</td></tr>`;
       }
-      const sum = summarizeDay(list, wins, isPart(s));
+      const sum = summarizeDay(list, wins.concat(closureWins(ds, holidays)), isPart(s));
       let tags = isToday ? sum.tags.filter(t => t[1] !== "未打下班卡" && t[1] !== "早退") : sum.tags;
       if (off) tags = [["gray", off]].concat(tags.filter(t => !["未打上班卡", "未打下班卡", "遲到", "早退", "正常"].includes(t[1])));
       if (isPart(s) && shiftOf[s.empId]) tags = tags.concat([["field", `預告 ${shiftOf[s.empId].start}–${shiftOf[s.empId].end}`]]);
@@ -814,7 +814,25 @@ $("recList").onclick = async e => {
   } catch (err) { showMsg($("recMsg"), errMsg(err), "err"); btn.disabled = false; }
 };
 
-// ===== 國定假日 =====
+// ===== 國定假日／公司休假 =====
+// 一行一天：「2026-12-25 行憲紀念日」＝整天放假；「2026-10-23 13:00-17:00 颱風停班」＝只有這段時間停班
+const hh2 = n => `${String(n).padStart(2, "0")}:00`;
+function holLine(h) { return `${h.date}${h.from != null ? ` ${hh2(h.from)}-${hh2(h.to)}` : ""} ${h.name || ""}`.trim(); }
+function parseHolLine(l) {
+  const m = l.match(/^(\d{4}-\d{2}-\d{2})\s*(?:(\d{1,2}):(\d{2})\s*[-~～–]\s*(\d{1,2}):(\d{2})|(\d{1,2}):(\d{2})\s*起)?\s*(.*)$/);
+  if (!m || isNaN(Date.parse(m[1]))) return { error: `這一行格式不對：「${l}」，請用「2026-12-25 行憲紀念日」或「2026-10-23 13:00-17:00 颱風停班」的格式` };
+  const h = { date: m[1], name: (m[8] || "").trim() };
+  let from = null, to = null;
+  if (m[2] != null) { from = +m[2]; to = +m[4]; if (m[3] !== "00" || m[5] !== "00") return { error: `「${l}」：停班時間請用整點（例如 13:00）` }; }
+  else if (m[6] != null) { from = +m[6]; to = 17; if (m[7] !== "00") return { error: `「${l}」：停班時間請用整點（例如 13:00）` }; }
+  if (from != null) {
+    if (!(from >= 8 && to <= 17 && from < to)) return { error: `「${l}」：停班時段要在 08:00–17:00 之間，而且開始要早於結束` };
+    if (from <= 8 && to >= 17) { from = to = null; } // 整天停班就當成整天放假
+  }
+  if (from != null) { h.from = from; h.to = to; h.name = h.name || "停班"; }
+  else h.name = h.name || "國定假日";
+  return { h };
+}
 // 資料來源：行政院人事行政總處「政府行政機關辦公日曆表」，由開源專案 ruyut/TaiwanCalendar 整理成 JSON 放在 GitHub
 const HOL_SRC = y => `https://raw.githubusercontent.com/ruyut/TaiwanCalendar/master/data/${y}.json`;
 $("btnImportHol").onclick = async () => {
@@ -854,16 +872,18 @@ $("btnSaveHol").onclick = async () => {
   const lines = $("holText").value.split("\n").map(l => l.trim()).filter(Boolean);
   const list = [];
   for (const l of lines) {
-    const m = l.match(/^(\d{4}-\d{2}-\d{2})\s*(.*)$/);
-    if (!m || isNaN(Date.parse(m[1]))) { showMsg(msg, `這一行格式不對：「${l}」，請用 2026-12-25 行憲紀念日 的格式`, "err"); return; }
-    list.push({ date: m[1], name: m[2] || "國定假日" });
+    const r = parseHolLine(l);
+    if (r.error) { showMsg(msg, r.error, "err"); return; }
+    if (list.some(x => x.date === r.h.date)) { showMsg(msg, `${r.h.date} 重複了，同一天只能有一行`, "err"); return; }
+    list.push(r.h);
   }
   list.sort((a, b) => a.date.localeCompare(b.date));
   try {
     await setDoc(doc(db, "settings", "holidays"), { list, updatedBy: me.empId, updatedAt: serverTimestamp() });
     holidays = toHolidayMap(list);
-    $("holText").value = list.map(h => `${h.date} ${h.name}`).join("\n");
-    showMsg(msg, `已儲存 ${list.length} 個國定假日`, "ok");
+    $("holText").value = list.map(holLine).join("\n");
+    const half = list.filter(h => h.from != null).length;
+    showMsg(msg, `已儲存 ${list.length - half} 個放假日${half ? `、${half} 個半天停班` : ""}`, "ok");
     holYearHint(list);
     loadDay();
   } catch (e) { showMsg(msg, errMsg(e), "err"); }

@@ -7,10 +7,10 @@ import {
   todayStr, ymOfStr, toHolidayMap, isOffDay, offDayLabel, buildLeaveMap, calcLeaveHours, calcOtHours,
   computeBalances, fmtHours, LEAVE_TYPES, STATUS_INFO, ACTIVE_STATUS, OT_MONTH_LIMIT,
   reqTitle, reqWhen, reqSortKey, leaveOverlaps, fmtDateStr
-  , isPart, notify, callNotify, NOTIFY_URL, LINE_OA_ID, addDays
-} from "./common.js?v=17";
+  , isPart, notify, callNotify, NOTIFY_URL, LINE_OA_ID, addDays, closureWins
+} from "./common.js?v=18";
 import { onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { startBoard } from "./board.js?v=17";
+import { startBoard } from "./board.js?v=18";
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -351,19 +351,21 @@ async function loadMonth() {
       if (ymd > todayYmd) break;
       const ds = ymdToInput(ymd);
       const dayList = byDay[ymd] || [];
-      const wins = leaveMap[ds] || [];
+      const wins = (leaveMap[ds] || []).concat(closureWins(ds, holidays)); // 含半天停班時段
       const isToday = ymd === todayYmd;
       if (!dayList.length) {
         if (isOffDay(ds, holidays)) continue; // 假日沒打卡就略過
         if (office && office.goLive && ds < office.goLive) continue; // 系統啟用前
         if (me.hireDate && ds < me.hireDate) continue; // 到職前
-        if (isPart(me) && !wins.length) continue; // 兼職沒來上班的日子不列
+        if (isPart(me) && !wins.some(w => !w.off)) continue; // 兼職沒來上班的日子不列
         const s = summarizeDay([], wins, isPart(me));
-        if (s.fullLeave || (isPart(me) && wins.length)) {
+        if (s.closedAll) {
+          rows.push(`<tr><td>${fmtYmd(ymd)}</td><td>—</td><td>—</td><td>${tagsHtml(s.tags)}</td></tr>`);
+        } else if (s.fullLeave || (isPart(me) && s.leaveHours > 0)) {
           if (isPart(me)) s.tags = [["field", `請假 ${s.leaveHours}h`]];
           rows.push(`<tr><td>${fmtYmd(ymd)}</td><td>—</td><td>—</td><td>${tagsHtml(s.tags)}</td></tr>`);
         } else if (!isToday) {
-          const tags = [["warn", "未打卡"]].concat(wins.length ? [["field", `請假 ${s.leaveHours}h`]] : []);
+          const tags = [["warn", "未打卡"]].concat(s.leaveHours ? [["field", `請假 ${s.leaveHours}h`]] : []).concat(s.tags.filter(t => t[0] === "gray"));
           rows.push(`<tr><td>${fmtYmd(ymd)}</td><td>—</td><td>—</td><td>${tagsHtml(tags)}</td></tr>`);
         }
         continue;
