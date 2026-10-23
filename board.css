@@ -151,7 +151,9 @@
 }
 .board .plate .co { position: absolute; left: 8px; top: 8px; width: 7px; height: 7px; }
 .board .plate .led { position: absolute; right: 9px; top: 9px; width: 9px; height: 9px; border-radius: 50%; background: #22394a; box-shadow: inset 0 0 2px rgba(0,0,0,.6); }
-.board .plate .pn { font-size: 21px; font-weight: 700; letter-spacing: .12em; text-align: center; margin-top: 4px; }
+.board .plate .pn { font-size: 21px; font-weight: 700; letter-spacing: .12em; text-align: center; margin-top: 4px; white-space: nowrap; overflow: hidden; }
+/* 英文名字：字距縮小、字重稍輕，看起來跟中文名字一樣大小（太長時程式會再自動縮小） */
+.board .plate .pn.pn-en { letter-spacing: .01em; font-weight: 600; }
 /* 員工編號放在左上角（公司色塊右邊） */
 .board .plate .pid { position: absolute; left: 19px; top: 5px; right: 22px; font: 500 11px/1.2 ui-monospace, Consolas, monospace; color: var(--pn-mute); text-align: left; letter-spacing: .08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .board .plate .pst { margin-top: 7px; font-size: 13px; font-weight: 700; text-align: center; }

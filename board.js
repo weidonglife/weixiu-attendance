@@ -295,7 +295,7 @@ export function startBoard(root, { big = false } = {}) {
           return `<div class="plate p-${cls}${late ? " is-late" : ""}${changed ? " pop" : ""}" title="${esc(p.name)} ${label}">
             <span class="co ${COMPANY_CLASS[co] || ""}" aria-hidden="true"></span>
             <span class="led" aria-hidden="true"></span>
-            <div class="pn">${esc(p.name)}</div>
+            <div class="pn${/[\u3400-\u9fff]/.test(p.name) ? "" : " pn-en"}">${esc(p.name)}</div>
             <div class="pid">${esc(p.empId)}${p.empType === "part" ? "・兼職" : ""}</div>
             <div class="pst">${label}${timeAfter}${late ? `<em>遲到</em>` : ""}</div>
             <div class="pdt">${detail || "&nbsp;"}</div>
@@ -303,7 +303,22 @@ export function startBoard(root, { big = false } = {}) {
         }).join("")}</div></section>`;
     }).join("") || `<div class="b-empty">沒有員工</div>`;
     if (!directory.length) $r("sections").innerHTML = `<div class="b-empty">員工名單尚未建立。請管理員打開一次管理後台，名單就會自動建立。</div>`;
+    fitNames();
   }
+
+  // 名字太長（例如英文名字）時自動縮小字體，維持一行、不換行
+  function fitNames() {
+    root.querySelectorAll(".plate .pn").forEach(el => {
+      el.style.fontSize = "";
+      const w = el.clientWidth;
+      if (!w) return; // 看板還沒顯示（例如在別的分頁），等顯示時再調整
+      let size = parseFloat(getComputedStyle(el).fontSize);
+      const min = size * 0.55;
+      while (el.scrollWidth > w && size > min) { size -= 1; el.style.fontSize = size + "px"; }
+    });
+  }
+  const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => fitNames()) : null;
+  if (ro) ro.observe(root);
 
   function tick() {
     const now = new Date();
@@ -325,5 +340,5 @@ export function startBoard(root, { big = false } = {}) {
     const left = Math.max(0, Math.round((nextRefresh - Date.now()) / 1000));
     $r("updated").textContent = `即時連線・最後更新 ${fmtTimeSec(lastUpdated)}・${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")} 後重新讀取`;
   }, 1000);
-  return () => { unsubs.forEach(u => u()); clearInterval(t1); clearInterval(t2); clearInterval(t3); };
+  return () => { unsubs.forEach(u => u()); clearInterval(t1); clearInterval(t2); clearInterval(t3); if (ro) ro.disconnect(); };
 }
