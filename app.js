@@ -10,7 +10,7 @@ import {
   , isPart, notify, callNotify, NOTIFY_URL, LINE_OA_ID, addDays, closureWins
 } from "./common.js?v=18";
 import { onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { startBoard } from "./board.js?v=18";
+import { startBoard } from "./board.js?v=19";
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";

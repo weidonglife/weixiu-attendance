@@ -144,7 +144,7 @@
 /* ---- 名牌 ---- */
 .board .plates { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
 .board .plate {
-  position: relative; padding: 12px 10px 9px; border-radius: 10px;
+  position: relative; padding: 20px 10px 9px; border-radius: 10px;
   background: linear-gradient(180deg, #0f3249, #0b283b);
   border: 1px solid var(--pn-edge); box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
   transition: border-color .4s, background .4s, opacity .4s;
@@ -152,7 +152,8 @@
 .board .plate .co { position: absolute; left: 8px; top: 8px; width: 7px; height: 7px; }
 .board .plate .led { position: absolute; right: 9px; top: 9px; width: 9px; height: 9px; border-radius: 50%; background: #22394a; box-shadow: inset 0 0 2px rgba(0,0,0,.6); }
 .board .plate .pn { font-size: 21px; font-weight: 700; letter-spacing: .12em; text-align: center; margin-top: 4px; }
-.board .plate .pid { font: 500 11px/1.2 ui-monospace, Consolas, monospace; color: var(--pn-mute); text-align: center; letter-spacing: .1em; }
+/* 員工編號放在左上角（公司色塊右邊） */
+.board .plate .pid { position: absolute; left: 19px; top: 5px; right: 22px; font: 500 11px/1.2 ui-monospace, Consolas, monospace; color: var(--pn-mute); text-align: left; letter-spacing: .08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .board .plate .pst { margin-top: 7px; font-size: 13px; font-weight: 700; text-align: center; }
 .board .plate .pst em { font-style: normal; margin-left: 6px; padding: 0 5px; border-radius: 3px; font-size: 11px; background: var(--st-late); color: #fff; vertical-align: 1px; }
 .board .plate .pdt { font-size: 12px; color: #a9c3d3; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.4em; }
@@ -246,7 +247,7 @@
   .board .seg7, .board.big .seg7 { font-size: 20px; }
   .board .b-legend, .board .b-note { margin-left: 0; }
   .board .plates, .board.big .plates { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
-  .board .plate { padding: 10px 6px 7px; }
+  .board .plate { padding: 18px 6px 7px; }
   .board .plate .pn, .board.big .plate .pn { font-size: 18px; letter-spacing: .06em; }
   .board.big .fp-mark { height: 36px; }
   .board.big .fp-title { font-size: 16px; }
