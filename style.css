@@ -143,6 +143,8 @@ tr.hl td { background: #fdf1e3; }
 .banner { background: #fff4e5; border: 1px solid #f0c27a; color: #8a4b0f; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-weight: 600; cursor: pointer; }
 .banner:hover { background: #ffecd2; }
 .banner a { color: inherit; }
+/* 員工編號放在名字左邊（管理後台表格） */
+.empno { display: inline-block; min-width: 3.4em; margin-right: 6px; color: var(--muted); font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
 a.btnlink { display: inline-block; background: #06c755; color: #fff; text-decoration: none; padding: 10px 16px; border-radius: 8px; font-size: 16px; }
 a.btnlink:hover { background: #05b04b; }
 .bindcode { font-family: ui-monospace, monospace; font-size: 30px; font-weight: 700; letter-spacing: .25em; color: var(--primary); margin: 6px 0 10px; }

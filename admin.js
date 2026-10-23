@@ -156,7 +156,7 @@ async function loadDay() {
       const list = (byEmp[s.empId] || []).sort((a, b) => a.ts - b.ts);
       const wins = leaveByEmp[s.empId] || [];
       const leaveTxt = wins.length ? `<br><span class="muted">${wins.map(w => `${esc(LEAVE_LABEL[w.type] || w.type)} ${w.hours}h`).join("、")}</span>` : "";
-      const nameCell = `<td>${esc(s.name)}${isPart(s) ? ' <span class="tag gray">兼職</span>' : ""}<br><span class="muted">${esc(s.empId)}</span></td><td>${esc(s.company)}</td>`;
+      const nameCell = `<td><span class="empno">${esc(s.empId)}</span>${esc(s.name)}${isPart(s) ? ' <span class="tag gray">兼職</span>' : ""}</td><td>${esc(s.company)}</td>`;
       if (!list.length) {
         let tags;
         if (isPart(s) && shiftOf[s.empId]) {
@@ -221,7 +221,7 @@ async function loadReport() {
     body.innerHTML = R.summary.map(s => {
       const other = s.leave.comp + s.leave.family + s.leave.menstrual + s.leave.other;
       const bad = s.lateCount + s.earlyCount + s.missIn + s.missOut + s.absent > 0;
-      return `<tr class="${bad ? "hl" : ""}"><td>${esc(s.name)}${s.part ? ' <span class="tag gray">兼職</span>' : ""}<br><span class="muted">${esc(s.empId)}</span></td>
+      return `<tr class="${bad ? "hl" : ""}"><td><span class="empno">${esc(s.empId)}</span>${esc(s.name)}${s.part ? ' <span class="tag gray">兼職</span>' : ""}</td>
         <td>${s.part ? '<span class="muted">—</span>' : s.workdays}</td><td>${s.attended}</td><td>${s.workHours ? `<b>${s.workHours}</b> h` : num(0)}</td><td>${num(s.fullLeaveDays)}</td><td>${num(s.absent)}</td>
         <td>${s.lateCount ? `${s.lateCount} 次<br><span class="muted">${s.lateMin} 分</span>` : num(0)}</td>
         <td>${s.earlyCount ? `${s.earlyCount} 次<br><span class="muted">${s.earlyMin} 分</span>` : num(0)}</td>
@@ -232,7 +232,7 @@ async function loadReport() {
 
     $("anoCount").textContent = R.anomalies.length ? `（${R.anomalies.length} 筆）` : "";
     $("anoBody").innerHTML = R.anomalies.map(a => `<tr>
-        <td>${esc(a.date.slice(5))}（${a.weekday}）</td><td>${esc(a.name)}<br><span class="muted">${esc(a.empId)}</span></td>
+        <td>${esc(a.date.slice(5))}（${a.weekday}）</td><td><span class="empno">${esc(a.empId)}</span>${esc(a.name)}</td>
         <td>${a.firstIn || "—"}</td><td>${a.lastOut || "—"}</td><td>${tagsHtml(a.issues.map(i => [i.startsWith("遲到") || i.startsWith("早退") ? "late" : "warn", i]))}</td></tr>`).join("")
       || `<tr><td colspan="5" class="muted">本月沒有異常 👍</td></tr>`;
 
@@ -240,7 +240,7 @@ async function loadReport() {
       const warn = b.daysLeft != null && b.daysLeft <= 60 && b.annualLeft > 0;
       const period = !b.hireDate ? '<span class="tag warn">未設定到職日</span>'
         : !b.ent.start ? `${esc(b.ent.end)} 起可休` : `${esc(b.ent.start)} ～ ${esc(b.ent.end)}${b.daysLeft != null ? `<br><span class="muted">剩 ${b.daysLeft} 天結束</span>` : ""}`;
-      return `<tr class="${warn ? "hl" : ""}"><td>${esc(b.name)}<br><span class="muted">${esc(b.empId)}</span></td>
+      return `<tr class="${warn ? "hl" : ""}"><td><span class="empno">${esc(b.empId)}</span>${esc(b.name)}</td>
         <td>${esc(b.hireDate || "—")}</td><td>${period}</td><td>${!b.ent ? "—" : b.part ? (b.ent.start ? `${b.annualTotal} 小時<br><span class="muted">兼職按比例</span>` : "—") : b.ent.days + " 天"}</td>
         <td>${fmtHours(b.annualUsed)}</td><td><b>${fmtHours(b.annualLeft)}</b></td><td>${fmtHours(b.compLeft)}</td></tr>`;
     }).join("") || `<tr><td colspan="7" class="muted">沒有員工</td></tr>`;
@@ -629,7 +629,7 @@ async function loadCorrections() {
     $("corCount").textContent = pending.length ? `(${pending.length})` : "";
     counts.cor = pending.length; renderBanner();
     body.innerHTML = pending.map(c => `<tr>
-        <td>${esc(c.name)}<br><span class="muted">${esc(c.empId)}</span></td>
+        <td><span class="empno">${esc(c.empId)}</span>${esc(c.name)}</td>
         <td>${esc(c.date)} ${esc(c.time)}</td><td>${TYPE_LABEL[c.type]}</td><td>${esc(c.reason)}</td>
         <td><button class="small" data-act="approve" data-id="${c.id}">核准</button>
             <button class="small danger" data-act="reject" data-id="${c.id}">駁回</button></td></tr>`).join("")
