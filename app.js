@@ -134,6 +134,7 @@ async function initMain() {
   watchReview();
   loadLine();
   initShifts();
+  loadAgents();
 }
 
 // ===== 兼職：上班預告 =====
@@ -431,6 +432,22 @@ function hourOptions(sel, def) {
     .map(h => `<option value="${h}"${h === def ? " selected" : ""}>${String(h).padStart(2, "0")}:00</option>`).join("");
 }
 
+// 代理人：從員工名單（settings/directory）選，不含自己
+async function loadAgents() {
+  try {
+    const snap = await getDoc(doc(db, "settings", "directory"));
+    const list = (snap.exists() ? snap.data().list || [] : []).filter(p => p.empId && p.empId !== me.empId);
+    $("lvAgent").innerHTML = '<option value="">（不指定）</option>' +
+      list.map(p => `<option value="${esc(p.empId)}">${esc(p.name)}（${esc(p.empId)}）</option>`).join("");
+  } catch (e) { console.warn("agents", e); }
+}
+function agentFields() {
+  const sel = $("lvAgent"), v = sel.value;
+  if (!v) return {};
+  return { agent: v, agentName: sel.options[sel.selectedIndex].text.replace(/（.*）$/, "") };
+}
+function agentLine(r) { return r.agentName ? `<div class="meta">代理人：${esc(r.agentName)}</div>` : ""; }
+
 function initLeaveForm() {
   $("lvType").innerHTML = LEAVE_TYPES.map(t => `<option value="${t.key}">${esc(t.label)}</option>`).join("");
   hourOptions($("lvStartHour"), 8);
@@ -534,13 +551,14 @@ $("btnLeave").onclick = async () => {
     const sup = me.supervisorEmpId || null;
     const ref = await addDoc(collection(db, "requests"), {
       uid: me.uid, empId: me.empId, name: me.name, company: me.company,
-      kind: "leave", ...r, hours, ym: ymOfStr(r.startDate), reason,
+      kind: "leave", ...r, hours, ym: ymOfStr(r.startDate), reason, ...agentFields(),
       supervisorEmpId: sup, status: sup ? "pending_supervisor" : "pending_admin",
       createdAt: serverTimestamp()
     });
     notify("request", ref.id);
     showMsg(msg, sup ? "已送出，等待主管審核" : "已送出，等待管理員核准", "ok");
     $("lvReason").value = "";
+    $("lvAgent").value = "";
     await loadRequests();
     // 送出成功後不再立刻重新檢查（否則會拿剛送出的那張比對，誤顯示「重疊」）；改日期時才會再檢查
     $("lvCalc").textContent = ""; $("lvCalc").classList.remove("err");
@@ -629,7 +647,7 @@ function renderMyRequests() {
   $("reqList").innerHTML = list.length ? list.map(r => `<div class="req">
       <div class="top"><span class="title">${esc(reqTitle(r))}・${r.hours} 小時</span>${statusTag(r)}</div>
       <div class="meta">${esc(reqWhen(r))}</div>
-      <div class="meta">事由：${esc(r.reason)}</div>
+      <div class="meta">事由：${esc(r.reason)}</div>${agentLine(r)}
       ${noteLines(r)}
       ${r.status === "pending_supervisor" || r.status === "pending_admin"
         ? `<div class="acts"><button class="small secondary" data-cancel="${r.id}">取消申請</button></div>` : ""}
@@ -675,7 +693,7 @@ function loadReview() {
   $("revList").innerHTML = pending.length ? pending.map(r => `<div class="req">
       <div class="top"><span class="title">${esc(r.name)}（${esc(r.empId)}）・${esc(reqTitle(r))}・${r.hours} 小時</span>${statusTag(r)}</div>
       <div class="meta">${esc(reqWhen(r))}</div>
-      <div class="meta">事由：${esc(r.reason)}</div>
+      <div class="meta">事由：${esc(r.reason)}</div>${agentLine(r)}
       <div class="acts">
         <input placeholder="意見（選填）" data-note="${r.id}">
         <button class="small" data-act="approve" data-id="${r.id}">核准</button>

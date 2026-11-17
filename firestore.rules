@@ -118,7 +118,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['uid', 'empId', 'name', 'company', 'kind',
              'leaveType', 'startDate', 'endDate', 'startHour', 'endHour',
              'date', 'startTime', 'endTime', 'comp',
-             'hours', 'ym', 'reason', 'supervisorEmpId', 'status', 'createdAt'])
+             'hours', 'ym', 'reason', 'agent', 'agentName', 'supervisorEmpId', 'status', 'createdAt'])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.empId == me().empId
         && request.resource.data.name == me().name
@@ -128,6 +128,8 @@ service cloud.firestore {
         && request.resource.data.hours > 0 && request.resource.data.hours <= 2000
         && request.resource.data.ym is int
         && request.resource.data.reason is string && request.resource.data.reason.size() > 0
+        && (!('agent' in request.resource.data) || (request.resource.data.agent is string && request.resource.data.agent.size() <= 20))
+        && (!('agentName' in request.resource.data) || (request.resource.data.agentName is string && request.resource.data.agentName.size() <= 50))
         && request.resource.data.supervisorEmpId == me().get('supervisorEmpId', null)
         && request.resource.data.status == (request.resource.data.supervisorEmpId == null ? 'pending_admin' : 'pending_supervisor')
         && request.resource.data.createdAt == request.time;

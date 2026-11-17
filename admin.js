@@ -719,7 +719,7 @@ async function loadPendingRequests() {
       parts.push(`<div class="req">
         <div class="top"><span class="title">${esc(r.name)}（${esc(r.empId)}）・${esc(reqTitle(r))}・${r.hours} 小時</span>${statusTag(r)}</div>
         <div class="meta">${esc(reqWhen(r))}</div>
-        <div class="meta">事由：${esc(r.reason)}</div>
+        <div class="meta">事由：${esc(r.reason)}</div>${r.agentName ? `<div class="meta">代理人：${esc(r.agentName)}</div>` : ""}
         ${r.supNote ? `<div class="meta">主管意見：${esc(r.supNote)}</div>` : ""}
         ${r.status === "pending_supervisor" ? `<div class="meta">主管 ${esc(staffName(r.supervisorEmpId))} 尚未審核</div>` : ""}
         ${bal ? `<div class="meta">${esc(bal)}</div>` : ""}
@@ -786,7 +786,7 @@ async function loadRecords() {
     $("recList").innerHTML = monthReqs.length ? monthReqs.map(r => `<div class="req">
         <div class="top"><span class="title">${esc(r.name)}（${esc(r.empId)}）・${esc(reqTitle(r))}・${r.hours} 小時</span>${statusTag(r)}</div>
         <div class="meta">${esc(reqWhen(r))}</div>
-        <div class="meta">事由：${esc(r.reason)}</div>
+        <div class="meta">事由：${esc(r.reason)}</div>${r.agentName ? `<div class="meta">代理人：${esc(r.agentName)}</div>` : ""}
         ${r.supNote ? `<div class="meta">主管意見：${esc(r.supNote)}</div>` : ""}
         ${r.adminNote ? `<div class="meta">管理員意見：${esc(r.adminNote)}</div>` : ""}
         ${r.status === "approved" ? `<div class="acts"><button class="small secondary" data-revoke="${r.id}">撤銷核准</button></div>` : ""}
