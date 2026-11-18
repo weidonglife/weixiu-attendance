@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=21">
+<link rel="stylesheet" href="style.css?v=22">
 </head>
 <body>
 <header class="top">
@@ -127,6 +127,25 @@
     <!-- 員工管理 -->
     <section id="tStaff" class="hidden">
       <div class="card">
+        <h2>簽核設定：主官／副主官</h2>
+        <div class="row">
+          <div><label for="apChief">主官</label><select id="apChief"></select></div>
+          <div><label for="apDeputy">副主官</label><select id="apDeputy"></select></div>
+        </div>
+        <button id="btnSaveApproval" style="margin-top:12px">儲存簽核設定</button>
+        <div id="apMsg" class="msg hidden"></div>
+        <div id="apNow" class="msg err hidden"></div>
+        <div class="muted" style="margin-top:10px;line-height:1.7">
+          請假、加班、補打卡的簽核流程：<br>
+          ① 先給<b>直屬主管</b>審核：<b>1 天（8 小時）以內</b>直屬主管核准就生效。<br>
+          ② <b>超過 1 天</b>：直屬主管核准後，再送<b>副主官</b>核定；<b>主官隨時也可以核定</b>。<br>
+          ③ 沒有直屬主管的員工：直接送副主官（主官也可以）。<br>
+          ④ 主官本人的申請由副主官核定；副主官本人的申請由主官核定。<br>
+          ⑤ 管理員可以在「請假／加班審核」「補打卡審核」<b>代為核准</b>，紀錄上會註明是誰代核。
+        </div>
+      </div>
+
+      <div class="card">
         <h2>新增員工</h2>
         <div class="row">
           <div><label for="nEmpId">員工編號</label><input id="nEmpId" placeholder="例如 001、A123" autocapitalize="characters"></div>
@@ -193,7 +212,7 @@
         </div>
         <button id="btnEdit" style="margin-top:12px">儲存變更</button>
         <div id="eMsg" class="msg hidden"></div>
-        <p class="muted">直屬主管會在自己的打卡頁看到「待我審核」，核准後再送到管理員做最終核准。沒有設定主管的員工，申請會直接送給管理員。</p>
+        <p class="muted">直屬主管會在自己的打卡頁看到「待我審核」。1 天以內的申請直屬主管核准就生效；超過 1 天再送副主官核定（主官也可以）。沒有設定直屬主管的員工，申請會直接送副主官。</p>
       </div>
 
       <div class="card" id="pwCard">
@@ -210,10 +229,11 @@
 
     <!-- 補打卡審核 -->
     <section id="tCor" class="card hidden">
-      <h2>待審核的補打卡申請</h2>
+      <h2>簽核中的補打卡申請</h2>
+      <p class="muted">補打卡由直屬主管在打卡頁核准（沒有直屬主管的送副主官）。管理員可以在這裡代為核准。</p>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>員工</th><th>日期時間</th><th>類別</th><th>原因</th><th>操作</th></tr></thead>
+          <thead><tr><th>員工</th><th>日期時間</th><th>類別</th><th>原因</th><th>目前進度</th><th>操作</th></tr></thead>
           <tbody id="corBody"></tbody>
         </table>
       </div>
@@ -222,8 +242,8 @@
 
     <!-- 請假／加班審核 -->
     <section id="tReq" class="card hidden">
-      <h2>待核准的請假／加班</h2>
-      <p class="muted">管理員核准後即生效。還在「待主管審核」的申請，管理員也可以直接核准（略過主管）。</p>
+      <h2>簽核中的請假／加班</h2>
+      <p class="muted">由直屬主管和主官／副主官在打卡頁「待我審核」核定。主管不在時，管理員可以在這裡代為核准（紀錄上會註明代核）。</p>
       <div id="reqBody" class="muted">載入中…</div>
       <div id="reqMsg" class="msg hidden"></div>
     </section>
@@ -290,6 +310,6 @@
   </div>
 </div>
 
-<script type="module" src="admin.js?v=23"></script>
+<script type="module" src="admin.js?v=24"></script>
 </body>
 </html>

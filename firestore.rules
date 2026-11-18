@@ -24,6 +24,78 @@ service cloud.firestore {
       return (t.year() * 100 + t.month()) * 100 + t.day();
     }
 
+    // ===== 簽核設定：主官／副主官（settings/approval）=====
+    function approvalDoc() { return /databases/$(database)/documents/settings/approval; }
+    function approval() {
+      return exists(approvalDoc()) ? get(approvalDoc()).data : {'chief': null, 'deputy': null};
+    }
+    function chiefId() { return approval().get('chief', null); }
+    function deputyId() { return approval().get('deputy', null); }
+    function isTopEmp(e) { return e != null && (e == chiefId() || e == deputyId()); }
+    function isTop() { return isActive() && isTopEmp(me().empId); }
+    // 送出時應該先給誰：主官／副主官本人直接進入最終核定；其他人先給直屬主管
+    function routedSup() { return isTopEmp(me().empId) ? null : me().get('supervisorEmpId', null); }
+    function routeOk(d) {
+      return d.supervisorEmpId == routedSup()
+        && d.status == (d.supervisorEmpId == null ? 'pending_admin' : 'pending_supervisor');
+    }
+    // 直屬主管審核：1 天（8 小時）以內或主管本身是主官／副主官 → 直接生效；否則送最終核定
+    function supReviewOk(hours) {
+      return resource.data.status == 'pending_supervisor'
+        && resource.data.supervisorEmpId == me().empId
+        && request.resource.data.supBy == me().empId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'supBy', 'supAt', 'supNote'])
+        && (request.resource.data.status == 'rejected'
+            || (request.resource.data.status == 'approved' && (hours <= 8 || isTopEmp(me().empId)))
+            || (request.resource.data.status == 'pending_admin' && hours > 8 && !isTopEmp(me().empId)));
+    }
+    // 主官／副主官最終核定（不能核定自己的申請）
+    function finalReviewOk() {
+      return isTop()
+        && resource.data.status in ['pending_admin', 'pending']
+        && resource.data.empId != me().empId
+        && request.resource.data.status in ['approved', 'rejected']
+        && request.resource.data.finalBy == me().empId
+        && ((request.resource.data.finalRole == 'chief' && me().empId == chiefId())
+            || (request.resource.data.finalRole == 'deputy' && me().empId == deputyId()))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'finalBy', 'finalAt', 'finalNote', 'finalRole']);
+    }
+    // 這次寫入是否由我把補打卡從審核中改成核准（同一批寫入）
+    function corrApprovedByMe(cid) {
+      return get(/databases/$(database)/documents/corrections/$(cid)).data.status in ['pending_supervisor', 'pending_admin', 'pending']
+        && getAfter(/databases/$(database)/documents/corrections/$(cid)).data.status == 'approved'
+        && (getAfter(/databases/$(database)/documents/corrections/$(cid)).data.get('supBy', null) == me().empId
+            || getAfter(/databases/$(database)/documents/corrections/$(cid)).data.get('finalBy', null) == me().empId);
+    }
+    function corrOf(cid) { return get(/databases/$(database)/documents/corrections/$(cid)).data; }
+    // 這次寫入是否由我把請假從審核中改成核准（同一批寫入）
+    function leaveApprovedByMe(rid) {
+      return get(/databases/$(database)/documents/requests/$(rid)).data.status in ['pending_supervisor', 'pending_admin']
+        && getAfter(/databases/$(database)/documents/requests/$(rid)).data.status == 'approved'
+        && getAfter(/databases/$(database)/documents/requests/$(rid)).data.kind == 'leave'
+        && (getAfter(/databases/$(database)/documents/requests/$(rid)).data.get('supBy', null) == me().empId
+            || getAfter(/databases/$(database)/documents/requests/$(rid)).data.get('finalBy', null) == me().empId);
+    }
+
+    // 直屬主管名單（管理後台自動維護 settings/supervisors.ids）
+    function isSupervisor() {
+      return isActive()
+        && exists(/databases/$(database)/documents/settings/supervisors)
+        && me().empId in get(/databases/$(database)/documents/settings/supervisors).data.ids;
+    }
+    // 請假一覽的內容必須和假單（寫入後的狀態）完全一致，所以誰同步都不會造假
+    function leaveListOk(rid) {
+      let r = getAfter(/databases/$(database)/documents/requests/$(rid)).data;
+      let d = request.resource.data;
+      return r.kind == 'leave'
+        && d.keys().hasOnly(['empId', 'name', 'company', 'leaveType', 'hours', 'startDate', 'endDate', 'startHour', 'endHour', 'status'])
+        && d.empId == r.empId && d.name == r.name && d.company == r.company
+        && d.leaveType == r.leaveType && d.hours == r.hours
+        && d.startDate == r.startDate && d.endDate == r.endDate
+        && d.startHour == r.startHour && d.endHour == r.endHour
+        && d.status == r.status;
+    }
+
     function bootstrapPending() {
       return !exists(/databases/$(database)/documents/settings/bootstrap)
         && existsAfter(/databases/$(database)/documents/settings/bootstrap);
@@ -88,30 +160,50 @@ service cloud.firestore {
 
       // 管理員核准補打卡時寫入
       allow create: if isAdmin() && request.resource.data.mode == 'correction';
+      // 直屬主管、主官／副主官核准補打卡時，同一批寫入一筆補打卡紀錄（內容必須和補打卡申請一致）
+      allow create: if isActive() && request.resource.data.mode == 'correction'
+        && request.resource.data.keys().hasOnly(['uid', 'empId', 'name', 'company', 'type', 'mode', 'ts', 'ym', 'ymd',
+             'lat', 'lng', 'accuracy', 'distance', 'customer', 'note', 'correctionId', 'approvedBy', 'deviceId'])
+        && request.resource.data.correctionId is string
+        && corrApprovedByMe(request.resource.data.correctionId)
+        && request.resource.data.approvedBy == me().empId
+        && request.resource.data.uid == corrOf(request.resource.data.correctionId).uid
+        && request.resource.data.empId == corrOf(request.resource.data.correctionId).empId
+        && request.resource.data.type == corrOf(request.resource.data.correctionId).type
+        && request.resource.data.ts is timestamp
+        && corrOf(request.resource.data.correctionId).date.replace('-', '') == string(request.resource.data.ymd)
+        && (request.resource.data.ts + duration.value(8, 'h')).year() * 10000
+           + (request.resource.data.ts + duration.value(8, 'h')).month() * 100
+           + (request.resource.data.ts + duration.value(8, 'h')).day() == request.resource.data.ymd;
 
       // 打卡紀錄不可修改、不可刪除（符合勞基法出勤紀錄保存要求）
       allow update, delete: if false;
     }
 
     // ===== 補打卡申請 =====
+    // 流程：員工送出 → 直屬主管（pending_supervisor）核准即生效；沒有直屬主管或主官／副主官本人 → 最終核定（pending_admin）
     match /corrections/{id} {
-      allow get, list: if isAdmin() || (isActive() && resource.data.empId == me().empId);
+      allow get, list: if isAdmin() || isTop()
+        || (isActive() && (resource.data.empId == me().empId || resource.data.supervisorEmpId == me().empId));
       allow create: if isActive()
-        && request.resource.data.keys().hasOnly(['uid', 'empId', 'name', 'company', 'date', 'time', 'type', 'reason', 'status', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'empId', 'name', 'company', 'date', 'time', 'type', 'reason', 'supervisorEmpId', 'status', 'createdAt'])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.empId == me().empId
-        && request.resource.data.status == 'pending'
+        && routeOk(request.resource.data)
         && request.resource.data.createdAt == request.time
+        && request.resource.data.date is string && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.type in ['in', 'out']
         && request.resource.data.reason is string && request.resource.data.reason.size() > 0;
-      allow update: if isAdmin();
+      allow update: if isAdmin()
+        || (isActive() && supReviewOk(0) && request.resource.data.status in ['approved', 'rejected'])
+        || finalReviewOk();
       allow delete: if false;
     }
 
     // ===== 請假／加班申請 =====
-    // 流程：員工送出 → 直屬主管（pending_supervisor）→ 管理員（pending_admin）→ 核准
+    // 流程：員工送出 → 直屬主管（pending_supervisor）→ 超過 8 小時再給主官／副主官（pending_admin）→ 核准
     match /requests/{id} {
-      allow get, list: if isAdmin()
+      allow get, list: if isAdmin() || isTop()
         || (isActive() && (resource.data.empId == me().empId || resource.data.supervisorEmpId == me().empId));
 
       allow create: if isActive()
@@ -130,8 +222,7 @@ service cloud.firestore {
         && request.resource.data.reason is string && request.resource.data.reason.size() > 0
         && (!('agent' in request.resource.data) || (request.resource.data.agent is string && request.resource.data.agent.size() <= 20))
         && (!('agentName' in request.resource.data) || (request.resource.data.agentName is string && request.resource.data.agentName.size() <= 50))
-        && request.resource.data.supervisorEmpId == me().get('supervisorEmpId', null)
-        && request.resource.data.status == (request.resource.data.supervisorEmpId == null ? 'pending_admin' : 'pending_supervisor')
+        && routeOk(request.resource.data)
         && request.resource.data.createdAt == request.time;
 
       allow update: if isAdmin()
@@ -140,12 +231,10 @@ service cloud.firestore {
             && resource.data.status in ['pending_supervisor', 'pending_admin']
             && request.resource.data.status == 'cancelled'
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt']))
-        // 直屬主管審核（核准後送管理員，或駁回）
-        || (isActive() && resource.data.supervisorEmpId == me().empId
-            && resource.data.status == 'pending_supervisor'
-            && request.resource.data.status in ['pending_admin', 'rejected']
-            && request.resource.data.supBy == me().empId
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'supBy', 'supAt', 'supNote']));
+        // 直屬主管審核
+        || (isActive() && supReviewOk(resource.data.hours))
+        // 主官／副主官最終核定
+        || finalReviewOk();
 
       allow delete: if false;
     }
@@ -157,7 +246,7 @@ service cloud.firestore {
       allow create, update: if isAdmin()
         || (isActive()
             && id == string(request.resource.data.ymd) + '_' + me().empId
-            && request.resource.data.keys().hasOnly(['ymd', 'empId', 'name', 'company', 'mode', 'customer', 'lastType', 'inAt', 'outAt', 'lastAt'])
+            && request.resource.data.keys().hasOnly(['ymd', 'empId', 'name', 'company', 'mode', 'customer', 'lastType', 'inAt', 'outAt', 'lastAt', 'corrId'])
             && request.resource.data.empId == me().empId
             && request.resource.data.name == me().name
             && request.resource.data.company == me().company
@@ -168,7 +257,17 @@ service cloud.firestore {
             && (!('inAt' in request.resource.data) || request.resource.data.inAt == request.time
                 || (resource != null && 'inAt' in resource.data && request.resource.data.inAt == resource.data.inAt))
             && (!('outAt' in request.resource.data) || request.resource.data.outAt == request.time
-                || (resource != null && 'outAt' in resource.data && request.resource.data.outAt == resource.data.outAt)));
+                || (resource != null && 'outAt' in resource.data && request.resource.data.outAt == resource.data.outAt)))
+        // 主管核准「今天」的補打卡時，同一批更新看板
+        || (isActive()
+            && request.resource.data.corrId is string
+            && corrApprovedByMe(request.resource.data.corrId)
+            && request.resource.data.keys().hasOnly(['ymd', 'empId', 'name', 'company', 'mode', 'customer', 'lastType', 'inAt', 'outAt', 'lastAt', 'corrId'])
+            && request.resource.data.ymd == ymdNow()
+            && corrOf(request.resource.data.corrId).date.replace('-', '') == string(ymdNow())
+            && request.resource.data.empId == corrOf(request.resource.data.corrId).empId
+            && id == string(request.resource.data.ymd) + '_' + request.resource.data.empId
+            && request.resource.data.lastAt == request.time);
       allow delete: if isAdmin();
     }
     // ===== 兼職上班預告：兼職自己登記未來 31 天內哪天會來 =====
@@ -201,9 +300,34 @@ service cloud.firestore {
     match /leaveBoard/{id} {
       allow get, list: if isActive();
       allow write: if isAdmin();
+      // 主管核准請假時，同一批寫入看板（內容必須和假單一致）
+      allow create, update: if isActive() && leaveApprovedByMe(id)
+        && request.resource.data.keys().hasOnly(['empId', 'name', 'company', 'startDate', 'endDate', 'startHour', 'endHour'])
+        && request.resource.data.empId == getAfter(/databases/$(database)/documents/requests/$(id)).data.empId
+        && request.resource.data.name == getAfter(/databases/$(database)/documents/requests/$(id)).data.name
+        && request.resource.data.company == getAfter(/databases/$(database)/documents/requests/$(id)).data.company
+        && request.resource.data.startDate == getAfter(/databases/$(database)/documents/requests/$(id)).data.startDate
+        && request.resource.data.endDate == getAfter(/databases/$(database)/documents/requests/$(id)).data.endDate
+        && request.resource.data.startHour == getAfter(/databases/$(database)/documents/requests/$(id)).data.startHour
+        && request.resource.data.endHour == getAfter(/databases/$(database)/documents/requests/$(id)).data.endHour;
+    }
+
+    // 全員請假一覽（不含事由）：直屬主管、主官／副主官、管理員可以看
+    match /leaveList/{id} {
+      allow get, list: if isAdmin() || isTop() || isSupervisor();
+      allow write: if isAdmin();
+      allow create, update: if isActive() && leaveListOk(id);
     }
 
     // ===== 系統設定 =====
+    match /settings/supervisors {
+      allow get: if isActive();
+      allow write: if isAdmin();
+    }
+    match /settings/approval {
+      allow get: if isActive();
+      allow write: if isAdmin();
+    }
     match /settings/directory {
       allow get: if isActive();
       allow write: if isAdmin();

@@ -241,7 +241,8 @@ export const LEAVE_TYPES = [
 export const LEAVE_LABEL = Object.fromEntries(LEAVE_TYPES.map(t => [t.key, t.label]));
 export const STATUS_INFO = {
   pending_supervisor: ["warn", "待主管審核"],
-  pending_admin: ["warn", "待管理員核准"],
+  pending_admin: ["warn", "待核定"],          // 內部名稱沿用 pending_admin，代表「等副主官／主官最終核定」
+  pending: ["warn", "待核定"],                // 舊版補打卡的狀態
   approved: ["ok", "已核准"],
   rejected: ["late", "已駁回"],
   cancelled: ["gray", "已取消"]
@@ -250,6 +251,85 @@ export const ACTIVE_STATUS = ["pending_supervisor", "pending_admin", "approved"]
 export const OT_COMP_LABEL = { pay: "加班費", comp: "換補休" };
 export const OT_MONTH_LIMIT = 46;
 export const HOURS_PER_DAY = 8;
+
+// ===================================================================
+// 簽核流程（settings/approval：{ chief: 主官員工編號, deputy: 副主官員工編號 }）
+//   一般員工：直屬主管 → 8 小時以內直接生效；超過 8 小時再送副主官核定（主官隨時也可以核定）
+//   沒有直屬主管：直接送副主官（主官也可以）
+//   主官本人的申請 → 副主官核定；副主官本人的申請 → 主官核定
+//   直屬主管本身就是主官或副主官 → 他核准就生效
+//   補打卡比照辦理（視為 1 天以內）
+// ===================================================================
+export const FINAL_HOURS = HOURS_PER_DAY;
+export const PENDING = ["pending_supervisor", "pending_admin", "pending"];
+export function normApproval(a) { return { chief: (a && a.chief) || null, deputy: (a && a.deputy) || null }; }
+export function topRole(a, empId) {
+  if (!empId) return null;
+  if (a.chief === empId) return "chief";
+  if (a.deputy === empId) return "deputy";
+  return null;
+}
+export const TOP_LABEL = { chief: "主官", deputy: "副主官", admin: "管理員" };
+// 送出時：要先給誰審
+export function routeOf(a, emp) {
+  const sup = topRole(a, emp.empId) ? null : (emp.supervisorEmpId || null);
+  return { supervisorEmpId: sup, status: sup ? "pending_supervisor" : "pending_admin" };
+}
+// 直屬主管核准後的狀態
+export function afterSupervisor(a, supEmpId, hours) {
+  return (hours <= FINAL_HOURS || topRole(a, supEmpId)) ? "approved" : "pending_admin";
+}
+// 這張單的最終核定應由誰處理（用來顯示與通知；主官另外隨時都可以核定）
+export function finalApprover(a, empId) {
+  if (empId === a.deputy) return a.chief;
+  if (empId === a.chief) return a.deputy;
+  return a.deputy || a.chief;
+}
+// 我能不能做最終核定
+export function canFinal(a, myEmpId, r) {
+  return !!topRole(a, myEmpId) && r.empId !== myEmpId && (r.status === "pending_admin" || r.status === "pending");
+}
+// 送出後給員工看的提示
+export function routeMsg(a, route, empId) {
+  if (route.status === "pending_supervisor") return "已送出，等待直屬主管審核";
+  const f = finalApprover(a, empId);
+  return f ? `已送出，等待${TOP_LABEL[topRole(a, f)]}核定` : "已送出，等待管理員核定";
+}
+// 這張單目前停在哪裡（給管理員和主管看）
+export function stageText(a, r, nameOf = x => x) {
+  if (r.status === "pending_supervisor") return `等直屬主管 ${nameOf(r.supervisorEmpId)} 審核`;
+  if (r.status === "pending_admin" || r.status === "pending") {
+    const f = finalApprover(a, r.empId);
+    if (!f) return "尚未設定主官／副主官，請管理員代為核定";
+    const role = topRole(a, f);
+    return role === "deputy" && a.chief && r.empId !== a.chief
+      ? `等副主官 ${nameOf(f)} 核定（主官 ${nameOf(a.chief)} 也可以核定）`
+      : `等${TOP_LABEL[role]} ${nameOf(f)} 核定`;
+  }
+  return "";
+}
+// 請假一覽（主管看的精簡資料，不含事由）：leaveList/{假單編號}，內容永遠和假單一致
+export const LL_KEYS = ["empId", "name", "company", "leaveType", "hours", "startDate", "endDate", "startHour", "endHour", "status"];
+export const leaveListOf = r => Object.fromEntries(LL_KEYS.map(k => [k, r[k] ?? null]));
+export const LL_DAYS = 30;
+
+// 審核意見（新舊欄位都顯示）
+export function reviewNotes(r, nameOf = x => x) {
+  const out = [];
+  if (r.supNote) out.push(`主管意見：${r.supNote}`);
+  if (r.finalNote) out.push(`${TOP_LABEL[r.finalRole] || "核定"}${r.finalRole === "admin" ? "代核" : ""}意見：${r.finalNote}`);
+  if (r.adminNote) out.push(`管理員意見：${r.adminNote}`);
+  return out;
+}
+// 誰核准的（已核准的單）
+export function approvedByText(r, nameOf = x => x) {
+  if (r.status !== "approved") return "";
+  if (r.finalBy) return `${TOP_LABEL[r.finalRole] || ""} ${nameOf(r.finalBy)} ${r.finalRole === "admin" ? "代為核准" : "核定"}`.trim();
+  if (r.supBy) return `直屬主管 ${nameOf(r.supBy)} 核准`;
+  if (r.adminBy) return `管理員 ${nameOf(r.adminBy)} 核准`;
+  if (r.reviewedBy) return `${nameOf(r.reviewedBy)} 核准`;
+  return "";
+}
 
 // 一段時間內落在上班時段（08–12、13–17）的時數
 export function overlapWork(s, e) {

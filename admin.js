@@ -6,8 +6,9 @@ import {
   todayStr, toHolidayMap, isOffDay, offDayLabel, buildLeaveMap, computeBalances, fmtHours,
   LEAVE_LABEL, STATUS_INFO, reqTitle, reqWhen, reqSortKey,
   computeMonthReport, leaveBalanceOverview, fmtTimeSec, OT_COMP_LABEL,
-  isPart, EMP_TYPE_LABEL, closureWins, closureOf, closureText, notify, callNotify, NOTIFY_URL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY
-} from "./common.js?v=18";
+  isPart, EMP_TYPE_LABEL, closureWins, closureOf, closureText, notify, callNotify, NOTIFY_URL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY,
+  normApproval, topRole, TOP_LABEL, PENDING, stageText, reviewNotes, approvedByText, leaveListOf, LL_KEYS, LL_DAYS, addDays
+} from "./common.js?v=19";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut
@@ -29,6 +30,7 @@ let staff = [];            // 在職員工
 let holidays = new Map();  // 國定假日
 let approvedLeaves = [];   // 所有已核准的假單（出勤表用）
 let officeCfg = {};        // 公司位置設定（含系統啟用日 goLive）
+let approval = normApproval(null); // 主官／副主官
 
 onAuthStateChanged(auth, async user => {
   if (!user) { me = null; stopPendingWatch(); $("who").textContent = ""; show("vLogin"); return; }
@@ -42,6 +44,7 @@ onAuthStateChanged(auth, async user => {
     $("dayPick").value = ymdToInput(ymdOf(new Date()));
     $("recMonth").value = $("rptMonth").value = todayStr().slice(0, 7);
     $("bkYear").value = todayStr().slice(0, 4);
+    await loadApproval();
     await Promise.all([loadStaff(), loadHolidays(), loadApprovedLeaves(), loadOffice()]);
     loadDay();
     loadReport();
@@ -95,6 +98,26 @@ async function loadApprovedLeaves() {
   const snap = await getDocs(query(collection(db, "requests"), where("status", "==", "approved")));
   approvedLeaves = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => r.kind === "leave");
   syncLeaveBoard().catch(e => console.warn("leaveBoard", e));
+  syncLeaveList().catch(e => console.warn("leaveList", e));
+}
+
+// 主管看的「全員請假一覽」：每張假單一筆精簡資料（不含事由），跟著假單狀態同步
+async function syncLeaveList() {
+  const from = addDays(todayStr(), -LL_DAYS * 2);
+  const [rs, ls] = await Promise.all([
+    getDocs(query(collection(db, "requests"), where("kind", "==", "leave"))),
+    getDocs(collection(db, "leaveList"))
+  ]);
+  const want = new Map(rs.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => r.endDate >= from).map(r => [r.id, leaveListOf(r)]));
+  const have = new Map(ls.docs.map(d => [d.id, d.data()]));
+  let batch = writeBatch(db), n = 0;
+  const flush = async () => { if (n) { await batch.commit(); batch = writeBatch(db); n = 0; } };
+  for (const [id, v] of want) {
+    const h = have.get(id);
+    if (!h || LL_KEYS.some(k => (h[k] ?? null) !== v[k])) { batch.set(doc(db, "leaveList", id), v); if (++n >= 400) await flush(); }
+  }
+  for (const id of have.keys()) if (!want.has(id)) { batch.delete(doc(db, "leaveList", id)); if (++n >= 400) await flush(); }
+  await flush();
 }
 
 // 看板用的請假時段（只有時間，不含假別與事由），跟著已核准假單同步
@@ -120,6 +143,12 @@ async function syncDirectory() {
   const sups = new Set(staff.map(s => s.supervisorEmpId).filter(Boolean));
   const list = staff.map(s => ({ empId: s.empId, name: s.name, company: s.company, ...(isPart(s) ? { empType: "part" } : {}),
     ...(sups.has(s.empId) ? { sup: true } : {}) }));
+  // 資料庫規則用：哪些人是直屬主管（可以看全員請假一覽）
+  const ids = [...sups].sort();
+  const sv = await getDoc(doc(db, "settings", "supervisors"));
+  if (!sv.exists() || JSON.stringify(sv.data().ids) !== JSON.stringify(ids)) {
+    await setDoc(doc(db, "settings", "supervisors"), { ids, updatedAt: serverTimestamp() });
+  }
   const cur = await getDoc(doc(db, "settings", "directory"));
   if (cur.exists() && JSON.stringify(cur.data().list) === JSON.stringify(list)) return;
   await setDoc(doc(db, "settings", "directory"), { list, updatedAt: serverTimestamp() });
@@ -376,7 +405,7 @@ $("nCompany").innerHTML = companyOpts(true);
 $("eCompany").innerHTML = companyOpts(false);
 
 function supOptions(excludeEmpId) {
-  return `<option value="">（無，直接由管理員核准）</option>` + staff.filter(s => s.empId !== excludeEmpId)
+  return `<option value="">（無，直接送副主官核定）</option>` + staff.filter(s => s.empId !== excludeEmpId)
     .map(s => `<option value="${esc(s.empId)}">${esc(s.empId)} ${esc(s.name)}</option>`).join("");
 }
 
@@ -385,7 +414,7 @@ async function loadStaff() {
   staff = snap.docs.map(d => ({ uid: d.id, ...d.data() })).sort((a, b) => a.empId.localeCompare(b.empId));
   $("staffBody").innerHTML = staff.map(s => `<tr>
       <td>${esc(s.empId)}</td><td>${esc(s.name)}</td><td>${esc(s.company)}</td>
-      <td>${s.role === "admin" ? '<span class="tag field">管理員</span>' : "員工"}</td>
+      <td>${s.role === "admin" ? '<span class="tag field">管理員</span>' : "員工"}${topRole(approval, s.empId) ? ` <span class="tag ok">${TOP_LABEL[topRole(approval, s.empId)]}</span>` : ""}</td>
       <td>${isPart(s) ? '<span class="tag gray">兼職</span>' : "正職"}</td>
       <td>${s.hireDate ? esc(s.hireDate) : '<span class="tag warn">未設定</span>'}</td>
       <td>${s.supervisorEmpId ? esc(staffName(s.supervisorEmpId)) : '<span class="muted">—</span>'}</td>
@@ -402,6 +431,7 @@ async function loadStaff() {
   $("eEmp").innerHTML = staff.map(s => `<option value="${s.uid}">${esc(s.empId)} ${esc(s.name)}</option>`).join("");
   if (keep && staff.some(s => s.uid === keep)) $("eEmp").value = keep;
   fillEdit();
+  fillApprovalCard();
   syncDirectory().catch(e => console.warn("directory", e));
   fillLineCol();
 }
@@ -589,6 +619,38 @@ $("btnResetPw").onclick = async () => {
   $("btnResetPw").disabled = false;
 };
 
+// ===== 簽核設定：主官／副主官 =====
+async function loadApproval() {
+  try {
+    const snap = await getDoc(doc(db, "settings", "approval"));
+    approval = normApproval(snap.exists() ? snap.data() : null);
+  } catch (e) { console.warn("approval", e); }
+}
+function fillApprovalCard() {
+  const opts = `<option value="">（未設定）</option>` + staff.map(s => `<option value="${esc(s.empId)}">${esc(s.empId)} ${esc(s.name)}</option>`).join("");
+  $("apChief").innerHTML = opts; $("apDeputy").innerHTML = opts;
+  $("apChief").value = approval.chief || ""; $("apDeputy").value = approval.deputy || "";
+  const warn = [];
+  if (approval.chief && !staff.some(s => s.empId === approval.chief)) warn.push(`主官 ${approval.chief} 已不在在職名單`);
+  if (approval.deputy && !staff.some(s => s.empId === approval.deputy)) warn.push(`副主官 ${approval.deputy} 已不在在職名單`);
+  if (!approval.chief && !approval.deputy) warn.push("尚未設定主官與副主官：超過 1 天的申請目前只能由管理員代為核定");
+  $("apNow").textContent = warn.join("；");
+  $("apNow").classList.toggle("hidden", !warn.length);
+}
+$("btnSaveApproval").onclick = async () => {
+  const chief = $("apChief").value || null, deputy = $("apDeputy").value || null;
+  if (chief && chief === deputy) { showMsg($("apMsg"), "主官和副主官不能是同一個人", "err"); return; }
+  $("btnSaveApproval").disabled = true;
+  try {
+    await setDoc(doc(db, "settings", "approval"), { chief, deputy, updatedBy: me.empId, updatedAt: serverTimestamp() });
+    approval = normApproval({ chief, deputy });
+    showMsg($("apMsg"), `已儲存：主官 ${chief ? staffName(chief) : "未設定"}、副主官 ${deputy ? staffName(deputy) : "未設定"}。員工重新整理打卡頁後生效。`, "ok");
+    await loadStaff();
+    loadPendingRequests(); loadCorrections();
+  } catch (e) { showMsg($("apMsg"), errMsg(e), "err"); }
+  $("btnSaveApproval").disabled = false;
+};
+
 // ===== 待審核即時提醒 =====
 // 有人送出補打卡、請假／加班，或主管核准後，數字和頂端提醒會馬上更新（不用重新整理）
 let pendingUnsubs = [];
@@ -597,7 +659,7 @@ const baseTitle = document.title;
 function watchPending() {
   stopPendingWatch();
   let t1 = null, t2 = null;
-  pendingUnsubs.push(onSnapshot(query(collection(db, "corrections"), where("status", "==", "pending")), () => {
+  pendingUnsubs.push(onSnapshot(query(collection(db, "corrections"), where("status", "in", PENDING)), () => {
     clearTimeout(t1); t1 = setTimeout(loadCorrections, 300);
   }, () => {}));
   pendingUnsubs.push(onSnapshot(query(collection(db, "requests"), where("status", "in", ["pending_supervisor", "pending_admin"])), () => {
@@ -610,7 +672,7 @@ function renderBanner() {
   if (counts.req) parts.push(`<a href="#" data-go="tReq">請假／加班 ${counts.req} 張</a>`);
   if (counts.cor) parts.push(`<a href="#" data-go="tCor">補打卡 ${counts.cor} 張</a>`);
   $("admBanner").classList.toggle("hidden", !parts.length);
-  $("admBanner").innerHTML = parts.length ? `🔔 等你核准：${parts.join("、")}` : "";
+  $("admBanner").innerHTML = parts.length ? `📋 簽核中：${parts.join("、")}（由主管核定，必要時可代核）` : "";
   const n = counts.req + counts.cor;
   document.title = n ? `(${n}) ${baseTitle}` : baseTitle;
 }
@@ -626,17 +688,19 @@ let pending = [];
 async function loadCorrections() {
   const body = $("corBody");
   try {
-    const snap = await getDocs(query(collection(db, "corrections"), where("status", "==", "pending")));
+    const snap = await getDocs(query(collection(db, "corrections"), where("status", "in", PENDING)));
     pending = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
     $("corCount").textContent = pending.length ? `(${pending.length})` : "";
     counts.cor = pending.length; renderBanner();
     body.innerHTML = pending.map(c => `<tr>
         <td><span class="empno">${esc(c.empId)}</span>${esc(c.name)}</td>
         <td>${esc(c.date)} ${esc(c.time)}</td><td>${TYPE_LABEL[c.type]}</td><td>${esc(c.reason)}</td>
-        <td><button class="small" data-act="approve" data-id="${c.id}">核准</button>
-            <button class="small danger" data-act="reject" data-id="${c.id}">駁回</button></td></tr>`).join("")
-      || `<tr><td colspan="5" class="muted">目前沒有待審核的申請</td></tr>`;
-  } catch (e) { body.innerHTML = `<tr><td colspan="5">${esc(errMsg(e))}</td></tr>`; }
+        <td>${esc(stageText(approval, c, staffName))}</td>
+        <td>${c.empId === me.empId ? '<span class="muted">本人的申請不能自己核准</span>'
+          : `<button class="small" data-act="approve" data-id="${c.id}">代為核准</button>
+            <button class="small danger" data-act="reject" data-id="${c.id}">駁回</button>`}</td></tr>`).join("")
+      || `<tr><td colspan="6" class="muted">目前沒有簽核中的補打卡</td></tr>`;
+  } catch (e) { body.innerHTML = `<tr><td colspan="6">${esc(errMsg(e))}</td></tr>`; }
 }
 
 $("corBody").onclick = async e => {
@@ -647,7 +711,7 @@ $("corBody").onclick = async e => {
   btn.disabled = true;
   try {
     const batch = writeBatch(db);
-    const review = { reviewedBy: me.empId, reviewedAt: serverTimestamp() };
+    const review = { finalBy: me.empId, finalAt: serverTimestamp(), finalNote: "", finalRole: "admin" };
     if (btn.dataset.act === "approve") {
       const when = new Date(`${c.date}T${c.time}:00+08:00`);
       batch.set(doc(collection(db, "punches")), {
@@ -674,7 +738,7 @@ $("corBody").onclick = async e => {
     }
     await batch.commit();
     notify("correction", c.id);
-    showMsg($("corMsg"), `已${btn.dataset.act === "approve" ? "核准" : "駁回"} ${c.name} 的申請`, "ok");
+    showMsg($("corMsg"), `已${btn.dataset.act === "approve" ? "代為核准" : "駁回"} ${c.name} 的申請`, "ok");
     await loadCorrections();
     loadDay();
     loadReport();
@@ -700,8 +764,8 @@ async function loadPendingRequests() {
     const snap = await getDocs(query(collection(db, "requests"), where("status", "in", ["pending_supervisor", "pending_admin"])));
     pendingReqs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => reqSortKey(a).localeCompare(reqSortKey(b)));
     $("reqCount").textContent = pendingReqs.length ? `(${pendingReqs.length})` : "";
-    counts.req = pendingReqs.filter(r => r.status === "pending_admin").length; renderBanner();
-    if (!pendingReqs.length) { body.innerHTML = "目前沒有待核准的申請"; return; }
+    counts.req = pendingReqs.length; renderBanner();
+    if (!pendingReqs.length) { body.innerHTML = "目前沒有簽核中的申請"; return; }
     const today = todayStr();
     const parts = [];
     for (const r of pendingReqs) {
@@ -723,13 +787,13 @@ async function loadPendingRequests() {
         <div class="meta">${esc(reqWhen(r))}</div>
         <div class="meta">事由：${esc(r.reason)}</div>${r.agentName ? `<div class="meta">代理人：${esc(r.agentName)}</div>` : ""}
         ${r.supNote ? `<div class="meta">主管意見：${esc(r.supNote)}</div>` : ""}
-        ${r.status === "pending_supervisor" ? `<div class="meta">主管 ${esc(staffName(r.supervisorEmpId))} 尚未審核</div>` : ""}
+        <div class="meta">⏳ ${esc(stageText(approval, r, staffName))}</div>
         ${bal ? `<div class="meta">${esc(bal)}</div>` : ""}
-        <div class="acts">
+        ${r.empId === me.empId ? `<div class="meta muted">本人的申請不能自己核准</div>` : `<div class="acts">
           <input placeholder="意見（選填）" data-note="${r.id}">
-          <button class="small" data-act="approve" data-id="${r.id}">${r.status === "pending_supervisor" ? "直接核准" : "核准"}</button>
+          <button class="small" data-act="approve" data-id="${r.id}">代為核准</button>
           <button class="small danger" data-act="reject" data-id="${r.id}">駁回</button>
-        </div></div>`);
+        </div>`}</div>`);
     }
     body.innerHTML = parts.join("");
   } catch (e) { body.textContent = errMsg(e); }
@@ -745,10 +809,10 @@ $("reqBody").onclick = async e => {
   try {
     await updateDoc(doc(db, "requests", r.id), {
       status: btn.dataset.act === "approve" ? "approved" : "rejected",
-      adminBy: me.empId, adminAt: serverTimestamp(), adminNote: note
+      finalBy: me.empId, finalAt: serverTimestamp(), finalNote: note, finalRole: "admin"
     });
     notify("request", r.id);
-    showMsg($("reqMsg"), `已${btn.dataset.act === "approve" ? "核准" : "駁回"} ${r.name} 的${reqTitle(r)}申請`, "ok");
+    showMsg($("reqMsg"), `已${btn.dataset.act === "approve" ? "代為核准" : "駁回"} ${r.name} 的${reqTitle(r)}申請`, "ok");
     await loadApprovedLeaves();
     loadPendingRequests();
     loadRecords();
@@ -789,8 +853,8 @@ async function loadRecords() {
         <div class="top"><span class="title">${esc(r.name)}（${esc(r.empId)}）・${esc(reqTitle(r))}・${r.hours} 小時</span>${statusTag(r)}</div>
         <div class="meta">${esc(reqWhen(r))}</div>
         <div class="meta">事由：${esc(r.reason)}</div>${r.agentName ? `<div class="meta">代理人：${esc(r.agentName)}</div>` : ""}
-        ${r.supNote ? `<div class="meta">主管意見：${esc(r.supNote)}</div>` : ""}
-        ${r.adminNote ? `<div class="meta">管理員意見：${esc(r.adminNote)}</div>` : ""}
+        ${[...reviewNotes(r, staffName), approvedByText(r, staffName) || (PENDING.includes(r.status) ? stageText(approval, r, staffName) : "")]
+          .filter(Boolean).map(x => `<div class="meta">${esc(x)}</div>`).join("")}
         ${r.status === "approved" ? `<div class="acts"><button class="small secondary" data-revoke="${r.id}">撤銷核准</button></div>` : ""}
       </div>`).join("") : "本月沒有申請";
   } catch (e) {

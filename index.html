@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=21">
+<link rel="stylesheet" href="style.css?v=22">
 <link rel="stylesheet" href="board.css?v=20">
 </head>
 <body>
@@ -201,13 +201,18 @@
   <section id="pReview" class="hidden">
     <div class="card">
       <h2>待我審核</h2>
-      <p class="muted">你核准後，會再送到管理員做最終核准。</p>
+      <p class="muted" id="revRole">1 天以內的申請你核准後就生效；超過 1 天會再送副主官核定。</p>
       <div id="revList" class="muted">目前沒有待審核的申請</div>
       <div id="revMsg" class="msg hidden"></div>
     </div>
     <div class="card">
       <h2>最近審核紀錄</h2>
       <div id="revHist" class="muted">尚無紀錄</div>
+    </div>
+    <div class="card" id="llCard">
+      <h2>全員請假一覽</h2>
+      <p class="muted" style="margin-top:-6px">過去 30 天到未來 30 天所有員工的請假，含審核中的假（不顯示事由）。</p>
+      <div id="llBody" class="muted">載入中…</div>
     </div>
   </section>
 
@@ -223,6 +228,6 @@
   <footer class="note">唯修科技 · 傳創機電 · 唯校中心</footer>
 </div>
 
-<script type="module" src="app.js?v=22"></script>
+<script type="module" src="app.js?v=23"></script>
 </body>
 </html>

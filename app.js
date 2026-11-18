@@ -8,11 +8,14 @@ import {
   computeBalances, fmtHours, LEAVE_TYPES, STATUS_INFO, ACTIVE_STATUS, OT_MONTH_LIMIT,
   reqTitle, reqWhen, reqSortKey, leaveOverlaps, fmtDateStr
   , isPart, notify, callNotify, NOTIFY_URL, LINE_OA_ID, addDays, closureWins
-} from "./common.js?v=18";
+  , normApproval, topRole, routeOf, afterSupervisor, canFinal, finalApprover, routeMsg, stageText, reviewNotes,
+  approvedByText, TOP_LABEL, PENDING, leaveListOf, LL_DAYS, LEAVE_LABEL
+} from "./common.js?v=19";
 import { onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { startBoard } from "./board.js?v=20";
+import { startBoard } from "./board.js?v=21";
 import {
-  doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot
+  doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot,
+  writeBatch, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $ = id => document.getElementById(id);
@@ -25,6 +28,8 @@ let holidays = new Map(); // 國定假日
 let myReqs = [];      // 我的請假／加班申請
 let mode = "office";  // office | field
 let boardStop = null; // 今日出勤看板（點分頁時才啟動）
+let approval = normApproval(null); // 主官／副主官設定
+let dirList = [];     // 員工名單（顯示姓名用）
 const deviceId = getDeviceId();
 
 // ===== 時鐘（僅顯示用，實際打卡時間由伺服器決定）=====
@@ -61,10 +66,12 @@ onAuthStateChanged(auth, async user => {
         "你的帳號已綁定另一支手機（或瀏覽器資料被清除）。如果換了手機，請聯絡管理員重設手機綁定。");
     }
 
-    const [oSnap, hSnap] = await Promise.all([
+    const [oSnap, hSnap, aSnap] = await Promise.all([
       getDoc(doc(db, "settings", "office")),
-      getDoc(doc(db, "settings", "holidays"))
+      getDoc(doc(db, "settings", "holidays")),
+      getDoc(doc(db, "settings", "approval")).catch(() => null)
     ]);
+    approval = normApproval(aSnap && aSnap.exists() ? aSnap.data() : null);
     office = oSnap.exists() ? oSnap.data() : null;
     holidays = toHolidayMap(hSnap.exists() ? hSnap.data().list : []);
 
@@ -393,20 +400,21 @@ $("btnCor").onclick = async () => {
   if (new Date(`${date}T${time}:00+08:00`) > new Date()) { showMsg(msg, "不能申請未來的時間", "err"); return; }
   $("btnCor").disabled = true;
   try {
+    const route = routeOf(approval, me);
     const ref = await addDoc(collection(db, "corrections"), {
       uid: me.uid, empId: me.empId, name: me.name, company: me.company,
       date, time, type: $("corType").value, reason,
-      status: "pending", createdAt: serverTimestamp()
+      ...route, createdAt: serverTimestamp()
     });
     notify("correction", ref.id);
-    showMsg(msg, "已送出，等待管理員核准", "ok");
+    showMsg(msg, routeMsg(approval, route, me.empId), "ok");
     $("corReason").value = "";
     loadCorrections();
   } catch (e) { showMsg(msg, errMsg(e), "err"); }
   $("btnCor").disabled = false;
 };
 
-const COR_STATUS = { pending: ["warn", "審核中"], approved: ["ok", "已核准"], rejected: ["late", "已駁回"] };
+const COR_STATUS = STATUS_INFO;
 async function loadCorrections() {
   try {
     const snap = await getDocs(query(collection(db, "corrections"), where("empId", "==", me.empId)));
@@ -437,6 +445,8 @@ async function loadAgents() {
   try {
     const snap = await getDoc(doc(db, "settings", "directory"));
     const all = snap.exists() ? snap.data().list || [] : [];
+    dirList = all;
+    renderMyRequests();
     isSup = all.some(p => p.empId === me.empId && p.sup === true);
     loadReview();
     const list = all.filter(p => p.empId && p.empId !== me.empId);
@@ -551,15 +561,20 @@ $("btnLeave").onclick = async () => {
   if (!reason) { showMsg(msg, "請填寫事由", "err"); return; }
   $("btnLeave").disabled = true;
   try {
-    const sup = me.supervisorEmpId || null;
-    const ref = await addDoc(collection(db, "requests"), {
+    const route = routeOf(approval, me);
+    const ref = doc(collection(db, "requests"));
+    const data = {
       uid: me.uid, empId: me.empId, name: me.name, company: me.company,
       kind: "leave", ...r, hours, ym: ymOfStr(r.startDate), reason, ...agentFields(),
-      supervisorEmpId: sup, status: sup ? "pending_supervisor" : "pending_admin",
-      createdAt: serverTimestamp()
-    });
+      ...route, createdAt: serverTimestamp()
+    };
+    // 假單和「請假一覽」一起寫入
+    const batch = writeBatch(db);
+    batch.set(ref, data);
+    batch.set(doc(db, "leaveList", ref.id), leaveListOf(data));
+    await batch.commit();
     notify("request", ref.id);
-    showMsg(msg, sup ? "已送出，等待主管審核" : "已送出，等待管理員核准", "ok");
+    showMsg(msg, routeMsg(approval, route, me.empId), "ok");
     $("lvReason").value = "";
     $("lvAgent").value = "";
     await loadRequests();
@@ -585,15 +600,14 @@ $("btnOT").onclick = async () => {
   }
   $("btnOT").disabled = true;
   try {
-    const sup = me.supervisorEmpId || null;
+    const route = routeOf(approval, me);
     const ref = await addDoc(collection(db, "requests"), {
       uid: me.uid, empId: me.empId, name: me.name, company: me.company,
       kind: "overtime", ...r, hours, ym: ymOfStr(r.date), reason,
-      supervisorEmpId: sup, status: sup ? "pending_supervisor" : "pending_admin",
-      createdAt: serverTimestamp()
+      ...route, createdAt: serverTimestamp()
     });
     notify("request", ref.id);
-    showMsg(msg, sup ? "已送出，等待主管審核" : "已送出，等待管理員核准", "ok");
+    showMsg(msg, routeMsg(approval, route, me.empId), "ok");
     $("otReason").value = "";
     await loadRequests();
     otConfirm = false; $("btnOT").textContent = "送出加班申請";
@@ -638,10 +652,16 @@ function renderBalances() {
 }
 
 function statusTag(r) { return tagsHtml([STATUS_INFO[r.status] || ["gray", r.status]]); }
+function nameOf(empId) {
+  if (!empId) return "";
+  const p = dirList.find(x => x.empId === empId);
+  return p ? p.name : empId;
+}
 function noteLines(r) {
-  const out = [];
-  if (r.supNote) out.push(`主管意見：${esc(r.supNote)}`);
-  if (r.adminNote) out.push(`管理員意見：${esc(r.adminNote)}`);
+  const out = reviewNotes(r, nameOf).map(esc);
+  const by = approvedByText(r, nameOf);
+  if (by) out.push(esc(by));
+  else if (PENDING.includes(r.status)) { const st = stageText(approval, r, nameOf); if (st) out.push(esc(st)); }
   return out.length ? `<div class="meta">${out.join("<br>")}</div>` : "";
 }
 
@@ -663,7 +683,11 @@ $("reqList").onclick = async e => {
   if (!btn.dataset.confirm) { btn.dataset.confirm = "1"; btn.textContent = "確定取消？"; return; }
   btn.disabled = true;
   try {
-    await updateDoc(doc(db, "requests", btn.dataset.cancel), { status: "cancelled", cancelledAt: serverTimestamp() });
+    const r0 = myReqs.find(x => x.id === btn.dataset.cancel);
+    const batch = writeBatch(db);
+    batch.update(doc(db, "requests", btn.dataset.cancel), { status: "cancelled", cancelledAt: serverTimestamp() });
+    if (r0 && r0.kind === "leave") batch.set(doc(db, "leaveList", r0.id), leaveListOf({ ...r0, status: "cancelled" }));
+    await batch.commit();
     showMsg($("reqMsg"), "已取消申請", "ok");
     await loadRequests();
     updateLeaveCalc(); updateOtCalc();
@@ -671,59 +695,191 @@ $("reqList").onclick = async e => {
 };
 
 // ===================================================================
-// 主管審核（只有被設定為主管的人才會看到）
+// 審核：直屬主管（第一關）＋ 主官／副主官（最終核定）
+//   只有被設為直屬主管、或主官／副主官的人才會看到「待我審核」
 // ===================================================================
-let teamReqs = [];
+let teamReqs = [];   // 我是直屬主管的請假／加班
+let teamCors = [];   // 我是直屬主管的補打卡
+let finalReqs = [];  // 等最終核定的請假／加班（主官／副主官才會讀）
+let finalCors = [];  // 等最終核定的補打卡
+let doneReqs = [];   // 我最終核定過的請假／加班
+let doneCors = [];   // 我最終核定過的補打卡
 let isSup = false;     // 被設定為某位員工的直屬主管（從 settings/directory 判斷）
-let reviewUnsub = null;
+let reviewUnsubs = [];
+let reviewItems = [];
+let llUnsub = null, llDocs = [];
 const baseTitle = document.title;
-// 即時監看：部屬一送出申請，「待我審核」的數字和頂端提醒就會馬上出現
+function myTop() { return me ? topRole(approval, me.empId) : null; }
+
+// 即時監看：一有人送出或上一關核准，「待我審核」的數字和頂端提醒就會馬上出現
 function watchReview() {
-  if (reviewUnsub) return;
-  reviewUnsub = onSnapshot(query(collection(db, "requests"), where("supervisorEmpId", "==", me.empId)), snap => {
-    teamReqs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    loadReview();
-  }, () => { teamReqs = []; loadReview(); });
+  if (reviewUnsubs.length) return;
+  const sub = (q, set) => reviewUnsubs.push(onSnapshot(q,
+    snap => { set(snap.docs.map(d => ({ id: d.id, ...d.data() }))); loadReview(); },
+    () => { set([]); loadReview(); }));
+  sub(query(collection(db, "requests"), where("supervisorEmpId", "==", me.empId)), v => { teamReqs = v; });
+  sub(query(collection(db, "corrections"), where("supervisorEmpId", "==", me.empId)), v => { teamCors = v; });
+  if (myTop()) {
+    sub(query(collection(db, "requests"), where("status", "==", "pending_admin")), v => { finalReqs = v; });
+    sub(query(collection(db, "corrections"), where("status", "in", ["pending_admin", "pending"])), v => { finalCors = v; });
+    sub(query(collection(db, "requests"), where("finalBy", "==", me.empId)), v => { doneReqs = v; });
+    sub(query(collection(db, "corrections"), where("finalBy", "==", me.empId)), v => { doneCors = v; });
+  }
 }
-function stopReviewWatch() { if (reviewUnsub) { reviewUnsub(); reviewUnsub = null; } teamReqs = []; isSup = false; }
+function stopReviewWatch() {
+  reviewUnsubs.splice(0).forEach(u => u());
+  if (llUnsub) { llUnsub(); llUnsub = null; } llDocs = [];
+  teamReqs = []; teamCors = []; finalReqs = []; finalCors = []; doneReqs = []; doneCors = []; isSup = false;
+}
+
+const corKey = c => `${c.date} ${c.time}`;
+function itemKey(it) { return it.k === "req" ? reqSortKey(it.r) : corKey(it.r); }
+function itemTitle(it, withId = true) {
+  const r = it.r, who = withId ? `${esc(r.name)}（${esc(r.empId)}）` : esc(r.name);
+  return it.k === "req"
+    ? `${who}・${esc(reqTitle(r))}・${r.hours} 小時`
+    : `${who}・補打卡・${TYPE_LABEL[r.type] || ""}`;
+}
+function itemWhen(it) { return it.k === "req" ? esc(reqWhen(it.r)) : `${esc(it.r.date)} ${esc(it.r.time)}`; }
+function itemHint(it) {
+  const r = it.r;
+  if (it.step === "sup") {
+    if (it.k === "cor") return "你核准後就生效";
+    return afterSupervisor(approval, me.empId, r.hours) === "approved"
+      ? "1 天以內，你核准後就生效"
+      : `超過 1 天，你核准後會再送 ${esc(stageText(approval, { ...r, status: "pending_admin" }, nameOf).replace(/^等/, ""))}`;
+  }
+  const exp = finalApprover(approval, r.empId);
+  if (myTop() === "chief" && exp && exp !== me.empId) return `原本由副主官 ${esc(nameOf(exp))} 核定，你是主官也可以直接核定；核准後就生效`;
+  return "你核准後就生效";
+}
+
 function loadReview() {
-  const pending = teamReqs.filter(r => r.status === "pending_supervisor").sort((a, b) => reqSortKey(a).localeCompare(reqSortKey(b)));
-  const hist = teamReqs.filter(r => r.status !== "pending_supervisor").sort((a, b) => reqSortKey(b).localeCompare(reqSortKey(a))).slice(0, 20);
-  $("tabReview").classList.toggle("hidden", !isSup && teamReqs.length === 0);
-  $("revCount").textContent = pending.length ? `(${pending.length})` : "";
-  $("revBanner").classList.toggle("hidden", !pending.length);
-  $("revBanner").textContent = pending.length ? `🔔 有 ${pending.length} 張請假／加班申請等你審核，點這裡處理` : "";
-  document.title = pending.length ? `(${pending.length}) ${baseTitle}` : baseTitle;
-  $("revList").innerHTML = pending.length ? pending.map(r => `<div class="req">
-      <div class="top"><span class="title">${esc(r.name)}（${esc(r.empId)}）・${esc(reqTitle(r))}・${r.hours} 小時</span>${statusTag(r)}</div>
-      <div class="meta">${esc(reqWhen(r))}</div>
-      <div class="meta">事由：${esc(r.reason)}</div>${agentLine(r)}
+  const items = [];
+  teamReqs.filter(r => r.status === "pending_supervisor").forEach(r => items.push({ k: "req", step: "sup", r }));
+  teamCors.filter(r => r.status === "pending_supervisor").forEach(r => items.push({ k: "cor", step: "sup", r }));
+  if (myTop()) {
+    finalReqs.filter(r => canFinal(approval, me.empId, r)).forEach(r => items.push({ k: "req", step: "final", r }));
+    finalCors.filter(r => canFinal(approval, me.empId, r)).forEach(r => items.push({ k: "cor", step: "final", r }));
+  }
+  items.sort((a, b) => itemKey(a).localeCompare(itemKey(b)));
+  reviewItems = items;
+
+  const seen = new Set(), hist = [];
+  const addHist = (list, k) => list.filter(r => !PENDING.includes(r.status) || r.supBy === me.empId).forEach(r => {
+    if (seen.has(k + r.id)) return; seen.add(k + r.id); hist.push({ k, r });
+  });
+  addHist(teamReqs, "req"); addHist(doneReqs, "req"); addHist(teamCors, "cor"); addHist(doneCors, "cor");
+  hist.sort((a, b) => itemKey(b).localeCompare(itemKey(a)));
+
+  const show = isSup || !!myTop() || teamReqs.length > 0 || teamCors.length > 0;
+  $("tabReview").classList.toggle("hidden", !show);
+  if ((isSup || myTop()) && !llUnsub) watchLeaveList();
+  const n = items.length;
+  $("revCount").textContent = n ? `(${n})` : "";
+  $("revBanner").classList.toggle("hidden", !n);
+  $("revBanner").textContent = n ? `🔔 有 ${n} 張申請等你審核，點這裡處理` : "";
+  document.title = n ? `(${n}) ${baseTitle}` : baseTitle;
+  $("revRole").textContent = myTop()
+    ? `你是${TOP_LABEL[myTop()]}：超過 1 天的請假、加班會送到這裡給你核定。`
+    : "1 天以內的申請你核准後就生效；超過 1 天會再送副主官核定。";
+
+  $("revList").innerHTML = n ? items.map(it => {
+    const r = it.r;
+    return `<div class="req">
+      <div class="top"><span class="title">${itemTitle(it)}</span>${statusTag(r)}</div>
+      <div class="meta">${itemWhen(it)}</div>
+      <div class="meta">${it.k === "req" ? "事由" : "原因"}：${esc(r.reason)}</div>${it.k === "req" ? agentLine(r) : ""}
+      ${r.supNote ? `<div class="meta">主管意見：${esc(r.supNote)}</div>` : ""}
+      <div class="meta hint">👉 ${itemHint(it)}</div>
       <div class="acts">
-        <input placeholder="意見（選填）" data-note="${r.id}">
-        <button class="small" data-act="approve" data-id="${r.id}">核准</button>
-        <button class="small danger" data-act="reject" data-id="${r.id}">駁回</button>
-      </div></div>`).join("") : "目前沒有待審核的申請";
-  $("revHist").innerHTML = hist.length ? hist.map(r => `<div class="req">
-      <div class="top"><span class="title">${esc(r.name)}・${esc(reqTitle(r))}・${r.hours} 小時</span>${statusTag(r)}</div>
-      <div class="meta">${esc(reqWhen(r))}</div>${noteLines(r)}</div>`).join("") : "尚無紀錄";
+        <input placeholder="意見（選填）" data-note="${it.k}:${r.id}">
+        <button class="small" data-act="approve" data-k="${it.k}" data-id="${r.id}">核准</button>
+        <button class="small danger" data-act="reject" data-k="${it.k}" data-id="${r.id}">駁回</button>
+      </div></div>`;
+  }).join("") : "目前沒有待審核的申請";
+  $("revHist").innerHTML = hist.length ? hist.slice(0, 20).map(it => `<div class="req">
+      <div class="top"><span class="title">${itemTitle(it, false)}</span>${statusTag(it.r)}</div>
+      <div class="meta">${itemWhen(it)}</div>${noteLines(it.r)}</div>`).join("") : "尚無紀錄";
+}
+
+// ===== 全員請假一覽（主管、主官、副主官）=====
+function watchLeaveList() {
+  const from = addDays(todayStr(), -LL_DAYS);
+  llUnsub = onSnapshot(query(collection(db, "leaveList"), where("endDate", ">=", from)),
+    snap => { llDocs = snap.docs.map(d => ({ id: d.id, kind: "leave", ...d.data() })); renderLeaveList(); },
+    () => { $("llBody").textContent = "請管理員先打開一次管理後台，請假一覽就會開放給主管查看。"; });
+}
+function renderLeaveList() {
+  const today = todayStr(), to = addDays(today, LL_DAYS);
+  const list = llDocs.filter(r => r.startDate <= to && ["pending_supervisor", "pending_admin", "approved"].includes(r.status));
+  const now = list.filter(r => r.endDate >= today).sort((a, b) => reqSortKey(a).localeCompare(reqSortKey(b)));
+  const past = list.filter(r => r.endDate < today).sort((a, b) => reqSortKey(b).localeCompare(reqSortKey(a)));
+  const row = r => `<div class="req">
+      <div class="top"><span class="title"><span class="empno">${esc(r.empId)}</span>${esc(r.name)}・${esc(LEAVE_LABEL[r.leaveType] || r.leaveType || "")}・${r.hours} 小時</span>${tagsHtml([r.status === "approved" ? ["ok", "已核准"] : ["warn", "審核中"]])}</div>
+      <div class="meta">${esc(reqWhen(r))}</div></div>`;
+  const block = (title, rows, empty) => `<h3 class="ll-h">${title}</h3>` + (rows.length ? rows.map(row).join("") : `<p class="muted">${empty}</p>`);
+  $("llBody").innerHTML = block(`請假中與接下來 30 天（${now.length}）`, now, "接下來 30 天沒有人請假")
+    + block(`過去 30 天（${past.length}）`, past, "過去 30 天沒有人請假");
+}
+
+// 看板用的請假時段
+const LB_KEYS = ["empId", "name", "company", "startDate", "endDate", "startHour", "endHour"];
+const lbOf = r => Object.fromEntries(LB_KEYS.map(k => [k, r[k] ?? null]));
+
+// 補打卡核准：同時寫入一筆打卡紀錄；如果是今天，也更新出勤看板
+async function addCorrectionPunch(batch, c) {
+  const when = new Date(`${c.date}T${c.time}:00+08:00`);
+  batch.set(doc(collection(db, "punches")), {
+    uid: c.uid, empId: c.empId, name: c.name, company: c.company,
+    type: c.type, mode: "correction",
+    ts: Timestamp.fromDate(when), ym: ymOf(when), ymd: ymdOf(when),
+    lat: null, lng: null, accuracy: null, distance: null,
+    customer: "", note: c.reason, correctionId: c.id, approvedBy: me.empId, deviceId: null
+  });
+  if (c.date === todayStr()) {
+    const pref = doc(db, "presence", `${ymdOf(when)}_${c.empId}`);
+    const cur = await getDoc(pref);
+    const pd = cur.exists() ? cur.data() : {};
+    const upd = { ymd: ymdOf(when), empId: c.empId, name: c.name, company: c.company, lastAt: serverTimestamp(), corrId: c.id };
+    if (!cur.exists()) { upd.mode = "office"; upd.customer = ""; upd.lastType = c.type; }
+    if (c.type === "in" && (!pd.inAt || pd.inAt.toDate() > when)) upd.inAt = Timestamp.fromDate(when);
+    if (c.type === "out") { upd.outAt = Timestamp.fromDate(when); upd.lastType = "out"; }
+    batch.set(pref, upd, { merge: true });
+  }
 }
 
 $("revBanner").onclick = () => $("tabReview").click();
 $("revList").onclick = async e => {
   const btn = e.target.closest("button[data-act]");
   if (!btn) return;
-  const r = teamReqs.find(x => x.id === btn.dataset.id);
-  if (!r) return;
-  const note = (document.querySelector(`input[data-note="${r.id}"]`)?.value || "").trim();
+  const it = reviewItems.find(x => x.k === btn.dataset.k && x.r.id === btn.dataset.id);
+  if (!it) return;
+  const r = it.r, ok = btn.dataset.act === "approve";
+  const note = (document.querySelector(`#revList input[data-note="${it.k}:${r.id}"]`)?.value || "").trim();
   btn.disabled = true;
   try {
-    await updateDoc(doc(db, "requests", r.id), {
-      status: btn.dataset.act === "approve" ? "pending_admin" : "rejected",
-      supBy: me.empId, supAt: serverTimestamp(), supNote: note
-    });
-    notify("request", r.id);
-    showMsg($("revMsg"), btn.dataset.act === "approve"
-      ? `已核准 ${r.name} 的申請，已送交管理員做最終核准` : `已駁回 ${r.name} 的申請`, "ok");
+    let status, upd;
+    if (it.step === "sup") {
+      status = !ok ? "rejected" : (it.k === "cor" ? "approved" : afterSupervisor(approval, me.empId, r.hours));
+      upd = { status, supBy: me.empId, supAt: serverTimestamp(), supNote: note };
+    } else {
+      status = ok ? "approved" : "rejected";
+      upd = { status, finalBy: me.empId, finalAt: serverTimestamp(), finalNote: note, finalRole: myTop() };
+    }
+    const batch = writeBatch(db);
+    batch.update(doc(db, it.k === "req" ? "requests" : "corrections", r.id), upd);
+    if (it.k === "req" && r.kind === "leave") batch.set(doc(db, "leaveList", r.id), leaveListOf({ ...r, status }));
+    if (status === "approved") {
+      if (it.k === "req" && r.kind === "leave") batch.set(doc(db, "leaveBoard", r.id), lbOf(r));
+      if (it.k === "cor") await addCorrectionPunch(batch, r);
+    }
+    await batch.commit();
+    notify(it.k === "req" ? "request" : "correction", r.id);
+    const what = `${r.name} 的${it.k === "req" ? reqTitle(r) : "補打卡"}`;
+    showMsg($("revMsg"), !ok ? `已駁回 ${what}`
+      : status === "approved" ? `已核准 ${what}，已經生效`
+      : `已核准 ${what}，因為超過 1 天，已送${stageText(approval, { ...r, status }, nameOf).replace(/^等/, "")}`, "ok");
     loadReview();
   } catch (err) { showMsg($("revMsg"), errMsg(err), "err"); btn.disabled = false; }
 };
