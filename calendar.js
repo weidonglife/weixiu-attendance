@@ -6,7 +6,8 @@
 import {
   db, esc, todayStr, addDays, weekdayOf, toHolidayMap, isOffDay, offDayLabel, isMakeupDay, closureOf,
   leaveDaySegments, LEAVE_LABEL, COMPANY_LIST
-} from "./common.js?v=24";
+} from "./common.js?v=23";
+import { lunarOf } from "./lunar.js?v=1";
 import {
   collection, query, where, onSnapshot, doc, getDoc, addDoc, updateDoc, deleteDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -137,7 +138,7 @@ export function startCalendar(root, opts = {}) {
         ...day.sh.map(s => `<span class="cc shift">${esc(s.name)}</span>`)
       ];
       cells += `<button type="button" class="${cls}" data-d="${d}">
-        <span class="n">${Number(d.slice(8, 10))}</span>
+        <span class="dh"><span class="n">${Number(d.slice(8, 10))}</span>${lunarCell(d)}</span>
         ${hol ? `<span class="hn">${esc(hol)}</span>` : cl ? `<span class="hn cl">⛈ ${esc(cl.name)}</span>` : ""}
         <span class="chips">${chips.slice(0, 3).join("")}${chips.length > 3 ? `<span class="more">+${chips.length - 3}</span>` : ""}</span>
         <span class="cnt">${cnt(day)}</span>
@@ -147,10 +148,22 @@ export function startCalendar(root, opts = {}) {
     renderDay(m);
   }
 
+  // 農民曆：格子裡顯示農曆日（初一顯示月份），遇到傳統節日、節氣改顯示名稱
+  function lunarCell(d) {
+    const l = lunarOf(d);
+    if (!l) return "";
+    return `<span class="ln${l.fest ? " fest" : l.term ? " term" : ""}">${esc(l.label)}</span>`;
+  }
+  function lunarLine(d) {
+    const l = lunarOf(d);
+    if (!l) return "";
+    return `<div class="cal-lunar">${esc(l.full)}${l.fest ? `<span class="tag field">${esc(l.fest)}</span>` : ""}${l.term ? `<span class="tag ok">${esc(l.term)}</span>` : ""}</div>`;
+  }
+
   function renderDay(m) {
     const d = sel, day = m[d] || { ev: [], lv: [], sh: [] };
     const label = offDayLabel(d, holidays), cl = closureOf(d, holidays);
-    let h = `<h3>${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}（${WK[weekdayOf(d)]}）${label ? ` <span class="tag late">${esc(label)}</span>` : ""}${isMakeupDay(d, holidays) ? ` <span class="tag warn">${esc(holidays.get(d))}</span>` : ""}${cl ? ` <span class="tag gray">⛈ ${hh(cl.s)}–${hh(cl.e)} ${esc(cl.name)}</span>` : ""}</h3>`;
+    let h = `<h3>${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}（${WK[weekdayOf(d)]}）${label ? ` <span class="tag late">${esc(label)}</span>` : ""}${isMakeupDay(d, holidays) ? ` <span class="tag warn">${esc(holidays.get(d))}</span>` : ""}${cl ? ` <span class="tag gray">⛈ ${hh(cl.s)}–${hh(cl.e)} ${esc(cl.name)}</span>` : ""}</h3>${lunarLine(d)}`;
     if (errText) h += `<p class="msg err">${esc(errText)}</p>`;
 
     h += `<h4>公司活動</h4>`;

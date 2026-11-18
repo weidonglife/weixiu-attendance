@@ -10,9 +10,9 @@ import {
   , isPart, notify, callNotify, NOTIFY_URL, LINE_OA_ID, addDays, closureWins
   , normApproval, topRole, routeOf, afterSupervisor, canFinal, finalApprover, routeMsg, stageText, reviewNotes,
   approvedByText, TOP_LABEL, PENDING, leaveListOf, LL_DAYS, LEAVE_LABEL, timelineHtml
-} from "./common.js?v=24";
+} from "./common.js?v=23";
 import { onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { startBoard } from "./board.js?v=26";
+import { startBoard } from "./board.js?v=25";
 import { startCalendar } from "./calendar.js?v=9";
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot,

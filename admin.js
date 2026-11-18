@@ -7,8 +7,8 @@ import {
   LEAVE_LABEL, STATUS_INFO, reqTitle, reqWhen, reqSortKey,
   computeMonthReport, leaveBalanceOverview, fmtTimeSec, OT_COMP_LABEL,
   isPart, EMP_TYPE_LABEL, closureWins, closureOf, closureText, notify, callNotify, NOTIFY_URL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY,
-  normApproval, topRole, TOP_LABEL, PENDING, stageText, reviewNotes, approvedByText, leaveListOf, LL_KEYS, LL_DAYS, addDays, timelineHtml, annualPeriodInfo, compLots, compPayDeadline
-} from "./common.js?v=24";
+  normApproval, topRole, TOP_LABEL, PENDING, stageText, reviewNotes, approvedByText, leaveListOf, LL_KEYS, LL_DAYS, addDays, timelineHtml, annualPeriodInfo, compLots
+} from "./common.js?v=23";
 import { startCalendar } from "./calendar.js?v=9";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
@@ -557,21 +557,15 @@ $("staffBody").onclick = async e => {
       await updateDoc(doc(db, "users", s.uid), { deviceId: null });
       showMsg(msg, `已重設 ${s.name} 的手機綁定，員工下次用新手機登入時會自動綁定。`, "ok");
     } else if (btn.dataset.act === "disable") {
-      // 離職結算（施行細則第 9 條、第 22-2 條、第 24-1 條）：未休特休、未休補休於終止契約時折發工資
-      const rs = resignSettle(s, await reqsOf(s.empId), todayStr());
       if (!btn.dataset.confirm) {
         btn.dataset.confirm = "1";
-        btn.textContent = rs.total > 0 ? "確定停用並記錄離職結算" : "確定停用？";
+        btn.textContent = "確定停用？";
         btn.disabled = false;
-        showMsg(msg, `${s.name} 離職結算（以今天 ${rs.date} 計）：` + (rs.total > 0
-          ? `未休特休 ${fmtHours(rs.annual)}${rs.prevAnnual ? `（含上一年度未結算 ${fmtHours(rs.prevAnnual)}）` : ""}、未休補休 ${fmtHours(rs.comp)}${rs.compExpired ? `（含已到期未發 ${fmtHours(rs.compExpired)}）` : ""}。
-             依法應於終止契約時折發工資：特休以一日工資計、補休依各次加班當日的加班費標準計。停用時會把這份結算記在員工資料，並列入「特休／補休結算」的 Excel。`
-          : "沒有未休的特休或補休。") + " 再按一次按鈕確認停用。", rs.total > 0 ? "err" : "ok");
         return;
       }
-      await updateDoc(doc(db, "users", s.uid), { active: false, resignSettle: { ...rs, by: me.empId, byName: me.name, at: new Date().toISOString() } });
+      await updateDoc(doc(db, "users", s.uid), { active: false });
       const subs = staff.filter(x => x.supervisorEmpId === s.empId).map(x => x.name);
-      showMsg(msg, `已停用 ${s.name} 的帳號（出勤紀錄仍會保留）。` + (rs.total > 0 ? `請薪資人員在最後一次薪資發給：未休特休 ${fmtHours(rs.annual)}、未休補休 ${fmtHours(rs.comp)}。` : "")
+      showMsg(msg, `已停用 ${s.name} 的帳號（出勤紀錄仍會保留）。`
         + (subs.length ? `提醒：${subs.join("、")} 的直屬主管是 ${s.name}，請到「編輯員工資料」改設新主管。` : ""), "ok");
     }
     await loadStaff();
@@ -800,21 +794,6 @@ $("corBody").onclick = async e => {
 };
 
 // ===== 請假／加班審核 =====
-// 離職結算：本年度未休特休（含遞延）＋上一年度還沒結算的未休特休；未休補休（含已到期但還沒記錄發給的）
-function resignSettle(s, reqs, today) {
-  const goLive = officeCfg.goLive || "0000-00-00";
-  const ent = s.hireDate ? annualEntitlement(s.hireDate, today) : null;
-  const cur = ent && ent.start ? annualPeriodInfo(s, reqs, ent.start) : null;
-  const prev = cur && cur.prevStart ? annualPeriodInfo(s, reqs, cur.prevStart) : null;
-  const curLeft = cur ? Math.max(0, cur.total - cur.used) : 0;
-  const prevAnnual = prev && !prev.settle && prev.end > goLive ? prev.unused : 0;
-  const cl = compLots(reqs, today, s.hireDate, s.compSettle || {});
-  const compLotsLeft = cl.lots.filter(l => l.left > 0).map(l => ({ id: l.id, otDate: l.date, hours: l.left, expired: l.exp <= today }));
-  const annual = curLeft + prevAnnual, comp = cl.left + cl.expired;
-  return { date: today, annual, prevAnnual, comp, compExpired: cl.expired, compLots: compLotsLeft, total: annual + comp,
-    annualPeriod: cur ? `${cur.start} ~ ${addDays(cur.end, -1)}` : "" };
-}
-
 // ===== 特休／補休結算 =====
 let settleRows = [];
 async function loadSettle() {
@@ -830,7 +809,7 @@ async function loadSettle() {
       const ent = s.hireDate ? annualEntitlement(s.hireDate, today) : null;
       const cur = ent && ent.start ? annualPeriodInfo(s, reqs, ent.start) : null;
       const prev = cur && cur.prevStart ? annualPeriodInfo(s, reqs, cur.prevStart) : null;
-      return { s, ent, cur, prev: prev && prev.end > goLive ? prev : null, comp: compLots(reqs, today, s.hireDate, s.compSettle || {}), today };
+      return { s, ent, cur, prev: prev && prev.end > goLive ? prev : null, comp: compLots(reqs, today, s.hireDate), today };
     });
     body.innerHTML = settleRows.map(({ s, ent, cur, prev }) => {
       const who = `<td><span class="empno">${esc(s.empId)}</span>${esc(s.name)}</td>`;
@@ -842,8 +821,7 @@ async function loadSettle() {
           ? `${st.pay ? `<span class="tag ok">發給工資 ${fmtHours(st.pay)}</span> ` : ""}${st.defer ? `<span class="tag field">遞延 ${fmtHours(st.defer)}</span> ` : ""}${!st.pay && !st.defer ? '<span class="tag gray">已休完</span> ' : ""}
              <button class="small secondary" data-st="undo" data-uid="${s.uid}" data-start="${prev.start}">撤銷</button>`
           : prev.unused <= 0 ? `<button class="small secondary" data-st="done" data-uid="${s.uid}" data-start="${prev.start}">確認已休完</button>`
-          : `<span class="muted small">應於 ${esc(addDays(prev.end, 29))} 前發給（或下次發薪日）</span><br>
-             <button class="small" data-st="pay" data-uid="${s.uid}" data-start="${prev.start}">全部發給工資</button>
+          : `<button class="small" data-st="pay" data-uid="${s.uid}" data-start="${prev.start}">全部發給工資</button>
              ${prev.deferrable > 0 ? `<button class="small secondary" data-st="defer" data-uid="${s.uid}" data-start="${prev.start}">遞延一年${prev.payOnly ? `（另發 ${fmtHours(prev.payOnly)}）` : ""}</button>` : ""}`;
         p = `<td>${esc(prev.start)} ～ ${esc(addDays(prev.end, -1))}</td><td>${fmtHours(prev.total)}${prev.carry ? `<br><span class="muted">含遞延 ${fmtHours(prev.carry)}</span>` : ""}</td>
           <td>${fmtHours(prev.used)}</td><td><b>${fmtHours(prev.unused)}</b></td><td>${act}</td>`;
@@ -858,24 +836,16 @@ async function loadSettle() {
     }).join("") || `<tr><td colspan="8" class="muted">沒有員工</td></tr>`;
 
     const crow = [];
-    const recent = addDays(today, -90);
     settleRows.forEach(({ s, comp, today }) => {
       comp.lots.filter(l => l.left > 0 && (l.exp <= today || Date.parse(l.exp) - Date.parse(today) <= 30 * 86400000)).forEach(l => {
-        crow.push({ s, l, st: l.exp <= today ? "expired" : "soon" });
+        const expired = l.exp <= today;
+        crow.push({ s, l, expired });
       });
-      comp.paidLots.filter(l => (l.paid.at || "").slice(0, 10) >= recent).forEach(l => crow.push({ s, l, st: "paid" }));
     });
-    crow.sort((a, b) => (a.st === "paid") - (b.st === "paid") || a.l.exp.localeCompare(b.l.exp));
-    // 補休期限末日＝到期日（exp）前一天
-    cbody.innerHTML = crow.map(({ s, l, st }) => `<tr class="${st === "expired" ? "hl" : ""}"><td><span class="empno">${esc(s.empId)}</span>${esc(s.name)}</td>
-      <td>${esc(l.date)}</td><td>${esc(addDays(l.exp, -1))}</td><td>${fmtHours(st === "paid" ? Number(l.paid.hours) || 0 : l.left)}</td>
-      <td>${st === "expired"
-        ? `<span class="tag late">已到期，改發加班費</span><br><span class="muted small">應於 ${esc(compPayDeadline(l.exp))} 前發給（或下次發薪日），依加班當日標準計算</span><br>
-           <button class="small" data-ct="pay" data-uid="${s.uid}" data-lot="${esc(l.id)}">已發給</button>`
-        : st === "paid"
-        ? `<span class="tag ok">已發給 ${esc(l.paid.payDate || "")}</span> <span class="muted small">${esc(l.paid.byName || "")}</span>
-           <button class="small secondary" data-ct="undo" data-uid="${s.uid}" data-lot="${esc(l.id)}">撤銷</button>`
-        : '<span class="tag warn">30 天內到期</span>'}</td></tr>`).join("")
+    crow.sort((a, b) => a.l.exp.localeCompare(b.l.exp));
+    cbody.innerHTML = crow.map(({ s, l, expired }) => `<tr class="${expired ? "hl" : ""}"><td><span class="empno">${esc(s.empId)}</span>${esc(s.name)}</td>
+      <td>${esc(l.date)}</td><td>${esc(l.exp)}</td><td>${fmtHours(l.left)}</td>
+      <td>${expired ? '<span class="tag late">已到期，改發加班費</span>' : '<span class="tag warn">30 天內到期</span>'}</td></tr>`).join("")
       || `<tr><td colspan="5" class="muted">目前沒有到期或 30 天內到期的補休 👍</td></tr>`;
   } catch (e) {
     body.innerHTML = `<tr><td colspan="8">${esc(errMsg(e))}</td></tr>`;
@@ -904,32 +874,6 @@ $("stBody").addEventListener("click", async e => {
     loadSettle();
   } catch (err) { showMsg($("stMsg"), errMsg(err), "err"); btn.disabled = false; }
 });
-// 到期補休：記錄已折發加班費（施行細則第 22-2 條：公司要能舉證）
-$("ctBody").addEventListener("click", async e => {
-  const btn = e.target.closest("button[data-ct]");
-  if (!btn) return;
-  const row = settleRows.find(x => x.s.uid === btn.dataset.uid);
-  if (!row) return;
-  const id = btn.dataset.lot, act = btn.dataset.ct;
-  const map = { ...(row.s.compSettle || {}) };
-  if (act === "undo") {
-    if (btn.dataset.sure !== "1") { btn.dataset.sure = "1"; btn.textContent = "確定撤銷？"; return; }
-    delete map[id];
-  } else {
-    const l = row.comp.expiredLots.find(x => x.id === id);
-    if (!l) return;
-    if (btn.dataset.sure !== "1") { btn.dataset.sure = "1"; btn.textContent = `確認已發給 ${fmtHours(l.left)} 加班費？`; return; }
-    map[id] = { hours: l.left, otDate: l.date, exp: l.exp, payDate: todayStr(), by: me.empId, byName: me.name, at: new Date().toISOString() };
-  }
-  btn.disabled = true;
-  try {
-    await updateDoc(doc(db, "users", row.s.uid), { compSettle: map });
-    row.s.compSettle = map;
-    const st = staff.find(x => x.uid === row.s.uid); if (st) st.compSettle = map;
-    showMsg($("stMsg"), `${row.s.name}：${act === "undo" ? "已撤銷" : "已記錄補休折發加班費"}`, "ok");
-    loadSettle();
-  } catch (err) { showMsg($("stMsg"), errMsg(err), "err"); btn.disabled = false; }
-});
 $("stXlsx").onclick = async () => {
   try {
     await loadXlsx();
@@ -941,16 +885,7 @@ $("stXlsx").onclick = async () => {
         cur ? `${cur.start} ~ ${addDays(cur.end, -1)}` : "", cur ? cur.total - cur.used : ""]));
     const crows = [];
     settleRows.forEach(({ s, comp }) => comp.expiredLots.forEach(l => crows.push([s.empId, s.name, l.date, l.exp, l.left])));
-    addSheet(wb, "補休到期", ["員工編號 Emp ID", "姓名 Name", "加班日期 OT Date", "補休期限 Last Day", "未休時數 Hours", "發給期限 Pay By"],
-      crows.map(r => [r[0], r[1], r[2], addDays(r[3], -1), r[4], compPayDeadline(r[3])]));
-    const prows = [];
-    settleRows.forEach(({ s }) => Object.values(s.compSettle || {}).forEach(p =>
-      prows.push([s.empId, s.name, p.otDate || "", p.exp ? addDays(p.exp, -1) : "", p.hours, p.payDate || "", p.byName || ""])));
-    const gone = (await getDocs(collection(db, "users"))).docs.map(d => d.data()).filter(u => u.resignSettle)
-      .sort((a, b) => (b.resignSettle.date || "").localeCompare(a.resignSettle.date || ""));
-    addSheet(wb, "離職結算", ["員工編號 Emp ID", "姓名 Name", "結算日 Date", "未休特休(小時)", "其中上一年度(小時)", "未休補休(小時)", "其中已到期(小時)", "處理人 By"],
-      gone.map(u => { const r = u.resignSettle; return [u.empId, u.name, r.date, r.annual, r.prevAnnual, r.comp, r.compExpired, r.byName || ""]; }));
-    addSheet(wb, "補休折發紀錄", ["員工編號 Emp ID", "姓名 Name", "加班日期 OT Date", "補休期限 Last Day", "折發時數 Hours", "發給日期 Paid On", "處理人 By"], prows);
+    addSheet(wb, "補休到期", ["員工編號 Emp ID", "姓名 Name", "加班日期 OT Date", "到期日 Expiry", "未休時數 Hours"], crows);
     XLSX.writeFile(wb, `特休補休結算_${todayStr()}.xlsx`);
   } catch (err) { showMsg($("stMsg"), errMsg(err), "err"); }
 };
