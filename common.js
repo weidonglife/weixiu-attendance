@@ -455,7 +455,10 @@ export function compExpiry(date, hireDate) {
   const ent = hireDate ? annualEntitlement(hireDate, date) : null;
   return ent && ent.end && ent.end < exp ? ent.end : exp;   // exp＝當天起就不能再用
 }
-export function compLots(reqs, today, hireDate) {
+// 到期補休的發給期限：補休期限末日（exp 前一天）起 30 日內（或次一工資給付日）
+export function compPayDeadline(exp) { return addDays(exp, 29); }
+// paid：users.compSettle＝{ 加班申請 id: { hours, payDate, at, by, byName } }，已折發工資的到期補休
+export function compLots(reqs, today, hireDate, paid = {}) {
   const active = r => ACTIVE_STATUS.includes(r.status);
   const lots = reqs.filter(r => r.kind === "overtime" && r.comp === "comp" && r.status === "approved")
     .map(r => ({ id: r.id, date: r.date, exp: compExpiry(r.date, hireDate), hours: r.hours || 0, left: r.hours || 0 }))
@@ -468,14 +471,20 @@ export function compLots(reqs, today, hireDate) {
     for (const l of lots) {
       if (need <= 0) break;
       if (l.left <= 0 || l.exp <= u.startDate) continue;   // 請假那天已經到期的不能用
+      if (l.date > u.startDate) continue;                    // 請假日之後才加班換得的補休，不能拿來抵這次請假
       const t = Math.min(need, l.left); l.left -= t; need -= t;
     }
     if (need > 0) short[u.id] = need;
   }
+  for (const l of lots) {                                   // 已折發工資的到期補休：不再列為未處理
+    const p = paid && paid[l.id];
+    if (p) { l.paid = p; l.left = Math.max(0, l.left - (Number(p.hours) || 0)); }
+  }
+  const paidLots = lots.filter(l => l.paid);
   const expiredLots = lots.filter(l => l.left > 0 && l.exp <= today);
   const live = lots.filter(l => l.left > 0 && l.exp > today);
   return {
-    lots, short,
+    lots, short, paidLots,
     expired: expiredLots.reduce((a, l) => a + l.left, 0), expiredLots,
     left: live.reduce((a, l) => a + l.left, 0),
     next: live[0] ? { exp: live[0].exp, hours: live.filter(l => l.exp === live[0].exp).reduce((a, l) => a + l.left, 0) } : null
@@ -517,7 +526,7 @@ export function computeBalances(reqs, hireDate, today, emp = null) {
   const annualCarry = info ? info.carry : 0;
   const compEarned = sum(reqs.filter(r => r.kind === "overtime" && r.comp === "comp" && r.status === "approved"));
   const compUsed = sum(reqs.filter(r => r.kind === "leave" && r.leaveType === "comp" && active(r)));
-  const cl = compLots(reqs, today, hireDate);
+  const cl = compLots(reqs, today, hireDate, (emp && emp.compSettle) || {});
   return {
     ent, part, annualTotal, annualUsed, annualPre, annualCarry, annualLeft: annualTotal - annualUsed,
     compEarned, compUsed, compLeft: cl.left, compExpired: cl.expired, compNext: cl.next
