@@ -11,7 +11,7 @@ import {
   , normApproval, topRole, routeOf, afterSupervisor, canFinal, finalApprover, routeMsg, stageText, reviewNotes,
   approvedByText, TOP_LABEL, PENDING, leaveListOf, LL_DAYS, LEAVE_LABEL
 } from "./common.js?v=19";
-import { onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { startBoard } from "./board.js?v=21";
 import { startCalendar } from "./calendar.js?v=1";
 import {
@@ -117,11 +117,47 @@ $("btnChangePw").onclick = async () => {
 
 $("btnLogout").onclick = $("btnBlockedLogout").onclick = () => logout();
 
+// ===== 我的設定 =====
+function renderMe() {
+  if (!me) return;
+  const rows = [
+    ["員工編號", me.empId], ["姓名", me.name], ["公司", me.company],
+    ["身分", isPart(me) ? "兼職" : "正職"],
+    ["直屬主管", me.supervisorEmpId ? nameOf(me.supervisorEmpId) : "（無）"]
+  ];
+  if (me.hireDate) rows.push(["到職日", me.hireDate]);
+  $("meInfo").innerHTML = rows.map(([k, v]) => `<div><span class="muted">${k}</span><b>${esc(v || "")}</b></div>`).join("");
+}
+$("btnMyPw").onclick = async () => {
+  const cur = $("myPwCur").value, p1 = $("myPw1").value, p2 = $("myPw2").value;
+  const msg = $("myPwMsg");
+  if (!cur) { showMsg(msg, "請輸入目前的密碼", "err"); return; }
+  const bad = checkNewPassword(p1, p2);
+  if (bad) { showMsg(msg, bad, "err"); return; }
+  if (p1 === cur) { showMsg(msg, "新密碼不能和目前的密碼一樣", "err"); return; }
+  $("btnMyPw").disabled = true;
+  try {
+    const u = auth.currentUser;
+    // 先用目前的密碼確認是本人，再改成新密碼
+    try {
+      await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, cur));
+    } catch (e) {
+      const c = e && e.code;
+      throw (c === "auth/invalid-credential" || c === "auth/wrong-password") ? new Error("目前的密碼不正確") : e;
+    }
+    await updatePassword(u, p1);
+    $("myPwCur").value = $("myPw1").value = $("myPw2").value = "";
+    showMsg(msg, "密碼已修改，下次登入請用新密碼", "ok");
+  } catch (e) { showMsg(msg, errMsg(e), "err"); }
+  $("btnMyPw").disabled = false;
+};
+
 // ===== 分頁 =====
 document.querySelectorAll("#mainTabs button[data-tab]").forEach(btn => {
   btn.onclick = () => {
     document.querySelectorAll("#mainTabs button[data-tab]").forEach(b => b.classList.toggle("on", b === btn));
-    ["pPunch", "pLeave", "pBoard", "pReview", "pCal"].forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.tab));
+    ["pPunch", "pLeave", "pBoard", "pReview", "pCal", "pMe"].forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.tab));
+    if (btn.dataset.tab === "pMe") renderMe();
     if (btn.dataset.tab === "pCal" && !calStop) calStop = startCalendar($("calRoot"));
     if (btn.dataset.tab === "pBoard" && !boardStop) boardStop = startBoard($("boardRoot"));
   };

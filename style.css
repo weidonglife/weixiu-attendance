@@ -196,3 +196,8 @@ footer.note { text-align: center; color: var(--muted); font-size: 12px; padding:
   .cal-row { grid-template-columns: 1.3fr 1fr 1fr; font-size: 13px; }
   .cal-row .tag { grid-column: 1 / -1; justify-self: start; }
 }
+
+/* ===== 我的設定 ===== */
+.me-info { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px 16px; }
+.me-info div { display: flex; flex-direction: column; gap: 2px; font-size: 15px; }
+.me-info .muted { font-size: 12px; }
