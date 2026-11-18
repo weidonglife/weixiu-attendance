@@ -115,9 +115,11 @@ async function syncLeaveBoard() {
   if (n) await batch.commit();
 }
 
-// 看板用的員工名單（只有編號、姓名、公司）
+// 看板用的員工名單（只有編號、姓名、公司）；sup:true 代表此人是某位員工的直屬主管
 async function syncDirectory() {
-  const list = staff.map(s => ({ empId: s.empId, name: s.name, company: s.company, ...(isPart(s) ? { empType: "part" } : {}) }));
+  const sups = new Set(staff.map(s => s.supervisorEmpId).filter(Boolean));
+  const list = staff.map(s => ({ empId: s.empId, name: s.name, company: s.company, ...(isPart(s) ? { empType: "part" } : {}),
+    ...(sups.has(s.empId) ? { sup: true } : {}) }));
   const cur = await getDoc(doc(db, "settings", "directory"));
   if (cur.exists() && JSON.stringify(cur.data().list) === JSON.stringify(list)) return;
   await setDoc(doc(db, "settings", "directory"), { list, updatedAt: serverTimestamp() });

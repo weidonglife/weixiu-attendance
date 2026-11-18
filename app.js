@@ -436,7 +436,10 @@ function hourOptions(sel, def) {
 async function loadAgents() {
   try {
     const snap = await getDoc(doc(db, "settings", "directory"));
-    const list = (snap.exists() ? snap.data().list || [] : []).filter(p => p.empId && p.empId !== me.empId);
+    const all = snap.exists() ? snap.data().list || [] : [];
+    isSup = all.some(p => p.empId === me.empId && p.sup === true);
+    loadReview();
+    const list = all.filter(p => p.empId && p.empId !== me.empId);
     $("lvAgent").innerHTML = '<option value="">（不指定）</option>' +
       list.map(p => `<option value="${esc(p.empId)}">${esc(p.name)}（${esc(p.empId)}）</option>`).join("");
   } catch (e) { console.warn("agents", e); }
@@ -671,6 +674,7 @@ $("reqList").onclick = async e => {
 // 主管審核（只有被設定為主管的人才會看到）
 // ===================================================================
 let teamReqs = [];
+let isSup = false;     // 被設定為某位員工的直屬主管（從 settings/directory 判斷）
 let reviewUnsub = null;
 const baseTitle = document.title;
 // 即時監看：部屬一送出申請，「待我審核」的數字和頂端提醒就會馬上出現
@@ -681,11 +685,11 @@ function watchReview() {
     loadReview();
   }, () => { teamReqs = []; loadReview(); });
 }
-function stopReviewWatch() { if (reviewUnsub) { reviewUnsub(); reviewUnsub = null; } teamReqs = []; }
+function stopReviewWatch() { if (reviewUnsub) { reviewUnsub(); reviewUnsub = null; } teamReqs = []; isSup = false; }
 function loadReview() {
   const pending = teamReqs.filter(r => r.status === "pending_supervisor").sort((a, b) => reqSortKey(a).localeCompare(reqSortKey(b)));
   const hist = teamReqs.filter(r => r.status !== "pending_supervisor").sort((a, b) => reqSortKey(b).localeCompare(reqSortKey(a))).slice(0, 20);
-  $("tabReview").classList.toggle("hidden", teamReqs.length === 0);
+  $("tabReview").classList.toggle("hidden", !isSup && teamReqs.length === 0);
   $("revCount").textContent = pending.length ? `(${pending.length})` : "";
   $("revBanner").classList.toggle("hidden", !pending.length);
   $("revBanner").textContent = pending.length ? `🔔 有 ${pending.length} 張請假／加班申請等你審核，點這裡處理` : "";
