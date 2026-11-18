@@ -225,3 +225,7 @@ input[type="date"], input[type="time"] {
 input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
 .cal .dot.pd { background: var(--orange); }
 .cal .cnt span { white-space: nowrap; }
+/* 簽核時間軸 */
+.tl { margin: 6px 0 2px; padding: 6px 10px; background: #f6f8fb; border-radius: 8px; font-size: 13px; color: var(--muted); line-height: 1.7; }
+.tl .tl-i { display: inline-block; width: 1.6em; }
+td .tl { margin-top: 4px; padding: 4px 8px; font-size: 12px; }

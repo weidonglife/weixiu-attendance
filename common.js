@@ -297,14 +297,14 @@ export function routeMsg(a, route, empId) {
 }
 // 這張單目前停在哪裡（給管理員和主管看）
 export function stageText(a, r, nameOf = x => x) {
-  if (r.status === "pending_supervisor") return `等直屬主管 ${nameOf(r.supervisorEmpId)} 審核`;
+  if (r.status === "pending_supervisor") return `等待直屬主管 ${nameOf(r.supervisorEmpId)} 審核`;
   if (r.status === "pending_admin" || r.status === "pending") {
     const f = finalApprover(a, r.empId);
     if (!f) return "尚未設定主官／副主官，請管理員代為核定";
     const role = topRole(a, f);
     return role === "deputy" && a.chief && r.empId !== a.chief
-      ? `等副主官 ${nameOf(f)} 核定（主官 ${nameOf(a.chief)} 也可以核定）`
-      : `等${TOP_LABEL[role]} ${nameOf(f)} 核定`;
+      ? `等待副主官 ${nameOf(f)} 核定（主官 ${nameOf(a.chief)} 也可以核定）`
+      : `等待${TOP_LABEL[role]} ${nameOf(f)} 核定`;
   }
   return "";
 }
@@ -321,6 +321,38 @@ export function reviewNotes(r, nameOf = x => x) {
   if (r.adminNote) out.push(`管理員意見：${r.adminNote}`);
   return out;
 }
+export function timelineHtml(r, nameOf = x => x) {
+  const t = reviewTimeline(r, nameOf);
+  return t.length ? `<div class="tl">${t.map(([i, x]) => `<div><span class="tl-i">${i}</span>${esc(x)}</div>`).join("")}</div>` : "";
+}
+// 簽核時間軸：送出 → 直屬主管 → 主官／副主官（或管理員代核）
+function tsDate(t) { return t && typeof t.toDate === "function" ? t.toDate() : (t instanceof Date ? t : null); }
+export function fmtStamp(t) {
+  const d = tsDate(t);
+  if (!d) return "";
+  const p = twParts(d), w = WEEK[new Date(Date.UTC(+p.year, +p.month - 1, +p.day)).getUTCDay()];
+  return `${+p.month}/${+p.day}（${w}）${p.hour}:${p.minute}`;
+}
+export function reviewTimeline(r, nameOf = x => x) {
+  const out = [];
+  const at = t => fmtStamp(t) || "時間未記錄";
+  if (r.createdAt) out.push(["📤", `${at(r.createdAt)}　送出申請`]);
+  const finalDone = !!(r.finalBy || r.adminBy || r.reviewedBy);
+  if (r.supBy) {
+    const rej = r.status === "rejected" && !finalDone;
+    out.push([rej ? "❌" : "✅", `${at(r.supAt)}　直屬主管 ${nameOf(r.supBy)} ${rej ? "駁回" : "核准"}`]);
+  }
+  const fin = r.finalBy ? [r.finalBy, r.finalAt, r.finalRole] : r.adminBy ? [r.adminBy, r.adminAt, "admin"] : r.reviewedBy ? [r.reviewedBy, r.reviewedAt, "admin"] : null;
+  const revoked = r.status === "cancelled" && !!r.cancelledBy;   // 管理員撤銷已核准的單
+  if (fin && (r.status === "approved" || r.status === "rejected" || revoked)) {
+    const ok = r.status !== "rejected", admin = fin[2] === "admin";
+    const who = `${TOP_LABEL[fin[2]] || ""} ${nameOf(fin[0])}`.trim();
+    out.push([ok ? "✅" : "❌", `${at(fin[1])}　${who} ${admin ? (ok ? "代為核准" : "駁回") : (ok ? "核定" : "駁回")}`]);
+  }
+  if (r.status === "cancelled") out.push(["🚫", `${r.cancelledAt ? at(r.cancelledAt) + "　" : ""}${revoked ? `管理員 ${nameOf(r.cancelledBy)} 撤銷核准` : "員工自行取消"}`]);
+  return out;
+}
+
 // 誰核准的（已核准的單）
 export function approvedByText(r, nameOf = x => x) {
   if (r.status !== "approved") return "";

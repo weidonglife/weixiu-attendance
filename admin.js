@@ -7,9 +7,9 @@ import {
   LEAVE_LABEL, STATUS_INFO, reqTitle, reqWhen, reqSortKey,
   computeMonthReport, leaveBalanceOverview, fmtTimeSec, OT_COMP_LABEL,
   isPart, EMP_TYPE_LABEL, closureWins, closureOf, closureText, notify, callNotify, NOTIFY_URL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY,
-  normApproval, topRole, TOP_LABEL, PENDING, stageText, reviewNotes, approvedByText, leaveListOf, LL_KEYS, LL_DAYS, addDays
-} from "./common.js?v=19";
-import { startCalendar } from "./calendar.js?v=3";
+  normApproval, topRole, TOP_LABEL, PENDING, stageText, reviewNotes, approvedByText, leaveListOf, LL_KEYS, LL_DAYS, addDays, timelineHtml
+} from "./common.js?v=20";
+import { startCalendar } from "./calendar.js?v=4";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut
@@ -722,7 +722,7 @@ async function loadCorrections() {
     body.innerHTML = pending.map(c => `<tr>
         <td><span class="empno">${esc(c.empId)}</span>${esc(c.name)}</td>
         <td>${esc(c.date)} ${esc(c.time)}</td><td>${TYPE_LABEL[c.type]}</td><td>${esc(c.reason)}</td>
-        <td>${esc(stageText(approval, c, staffName))}</td>
+        <td>${esc(stageText(approval, c, staffName))}${timelineHtml(c, staffName)}</td>
         <td>${c.empId === me.empId ? '<span class="muted">本人的申請不能自己核准</span>'
           : `<button class="small" data-act="approve" data-id="${c.id}">代為核准</button>
             <button class="small danger" data-act="reject" data-id="${c.id}">駁回</button>`}</td></tr>`).join("")
@@ -813,6 +813,7 @@ async function loadPendingRequests() {
         <div class="top"><span class="title">${esc(r.name)}（${esc(r.empId)}）・${esc(reqTitle(r))}・${r.hours} 小時</span>${statusTag(r)}</div>
         <div class="meta">${esc(reqWhen(r))}</div>
         <div class="meta">事由：${esc(r.reason)}</div>${r.agentName ? `<div class="meta">代理人：${esc(r.agentName)}</div>` : ""}
+        ${timelineHtml(r, staffName)}
         ${r.supNote ? `<div class="meta">主管意見：${esc(r.supNote)}</div>` : ""}
         <div class="meta">⏳ ${esc(stageText(approval, r, staffName))}</div>
         ${bal ? `<div class="meta">${esc(bal)}</div>` : ""}
@@ -880,7 +881,8 @@ async function loadRecords() {
         <div class="top"><span class="title">${esc(r.name)}（${esc(r.empId)}）・${esc(reqTitle(r))}・${r.hours} 小時</span>${statusTag(r)}</div>
         <div class="meta">${esc(reqWhen(r))}</div>
         <div class="meta">事由：${esc(r.reason)}</div>${r.agentName ? `<div class="meta">代理人：${esc(r.agentName)}</div>` : ""}
-        ${[...reviewNotes(r, staffName), approvedByText(r, staffName) || (PENDING.includes(r.status) ? stageText(approval, r, staffName) : "")]
+        ${timelineHtml(r, staffName)}
+        ${[...reviewNotes(r, staffName), PENDING.includes(r.status) ? "⏳ " + stageText(approval, r, staffName) : ""]
           .filter(Boolean).map(x => `<div class="meta">${esc(x)}</div>`).join("")}
         ${r.status === "approved" ? `<div class="acts"><button class="small secondary" data-revoke="${r.id}">撤銷核准</button></div>` : ""}
       </div>`).join("") : "本月沒有申請";

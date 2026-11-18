@@ -9,11 +9,11 @@ import {
   reqTitle, reqWhen, reqSortKey, leaveOverlaps, fmtDateStr
   , isPart, notify, callNotify, NOTIFY_URL, LINE_OA_ID, addDays, closureWins
   , normApproval, topRole, routeOf, afterSupervisor, canFinal, finalApprover, routeMsg, stageText, reviewNotes,
-  approvedByText, TOP_LABEL, PENDING, leaveListOf, LL_DAYS, LEAVE_LABEL
-} from "./common.js?v=19";
+  approvedByText, TOP_LABEL, PENDING, leaveListOf, LL_DAYS, LEAVE_LABEL, timelineHtml
+} from "./common.js?v=20";
 import { onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { startBoard } from "./board.js?v=21";
-import { startCalendar } from "./calendar.js?v=3";
+import { startBoard } from "./board.js?v=22";
+import { startCalendar } from "./calendar.js?v=4";
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot,
   writeBatch, Timestamp
@@ -736,10 +736,8 @@ function nameOf(empId) {
 }
 function noteLines(r) {
   const out = reviewNotes(r, nameOf).map(esc);
-  const by = approvedByText(r, nameOf);
-  if (by) out.push(esc(by));
-  else if (PENDING.includes(r.status)) { const st = stageText(approval, r, nameOf); if (st) out.push(esc(st)); }
-  return out.length ? `<div class="meta">${out.join("<br>")}</div>` : "";
+  if (PENDING.includes(r.status)) { const st = stageText(approval, r, nameOf); if (st) out.push("⏳ " + esc(st)); }
+  return timelineHtml(r, nameOf) + (out.length ? `<div class="meta">${out.join("<br>")}</div>` : "");
 }
 
 function renderMyRequests() {
@@ -824,7 +822,7 @@ function itemHint(it) {
     if (it.k === "cor") return "你核准後就生效";
     return afterSupervisor(approval, me.empId, r.hours) === "approved"
       ? "1 天以內，你核准後就生效"
-      : `超過 1 天，你核准後會再送 ${esc(stageText(approval, { ...r, status: "pending_admin" }, nameOf).replace(/^等/, ""))}`;
+      : `超過 1 天，你核准後會再送 ${esc(stageText(approval, { ...r, status: "pending_admin" }, nameOf).replace(/^等待/, ""))}`;
   }
   const exp = finalApprover(approval, r.empId);
   if (myTop() === "chief" && exp && exp !== me.empId) return `原本由副主官 ${esc(nameOf(exp))} 核定，你是主官也可以直接核定；核准後就生效`;
@@ -867,6 +865,7 @@ function loadReview() {
       <div class="top"><span class="title">${itemTitle(it)}</span>${statusTag(r)}</div>
       <div class="meta">${itemWhen(it)}</div>
       <div class="meta">${it.k === "req" ? "事由" : "原因"}：${esc(r.reason)}</div>${it.k === "req" ? agentLine(r) : ""}
+      ${timelineHtml(r, nameOf)}
       ${r.supNote ? `<div class="meta">主管意見：${esc(r.supNote)}</div>` : ""}
       <div class="meta hint">👉 ${itemHint(it)}</div>
       <div class="acts">
@@ -956,7 +955,7 @@ $("revList").onclick = async e => {
     const what = `${r.name} 的${it.k === "req" ? reqTitle(r) : "補打卡"}`;
     showMsg($("revMsg"), !ok ? `已駁回 ${what}`
       : status === "approved" ? `已核准 ${what}，已經生效`
-      : `已核准 ${what}，因為超過 1 天，已送${stageText(approval, { ...r, status }, nameOf).replace(/^等/, "")}`, "ok");
+      : `已核准 ${what}，因為超過 1 天，已送${stageText(approval, { ...r, status }, nameOf).replace(/^等待/, "")}`, "ok");
     loadReview();
   } catch (err) { showMsg($("revMsg"), errMsg(err), "err"); btn.disabled = false; }
 };
