@@ -93,7 +93,7 @@ button.danger { background: var(--red); }
 button.small { font-size: 13px; padding: 6px 10px; }
 button.block { width: 100%; margin-top: 14px; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; }
-.row > * { flex: 1; min-width: 120px; }
+.row > * { flex: 1 1 130px; min-width: 0; }
 .hidden { display: none !important; }
 .msg { padding: 10px 12px; border-radius: 8px; margin-top: 12px; font-size: 15px; }
 .msg.ok { background: #e6f4ec; color: var(--green); }
@@ -216,5 +216,10 @@ footer.note { text-align: center; color: var(--muted); font-size: 12px; padding:
 .cal-form .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .cal-form .row > * { min-width: 0; }
 .cal-form input[type="date"], .cal-form select { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
-.cal-form input[type="date"] { -webkit-appearance: none; appearance: none; display: block; min-height: 44px; text-align: left; font-size: 15px; }
-.cal-form input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+/* 日期、時間欄位（iPhone 預設會依文字撐寬，造成兩欄重疊）：一律不超出自己的格子 */
+input[type="date"], input[type="time"] {
+  -webkit-appearance: none; appearance: none;
+  display: block; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box;
+  min-height: 44px; text-align: left;
+}
+input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
