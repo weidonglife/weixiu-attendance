@@ -926,7 +926,11 @@ function noticeCell(s, cur, left = 0) {
     ? `${last.ok ? '<span class="tag ok">已送出</span>' : `<span class="tag late">未送達：${esc(last.error || "失敗")}</span>`}
        <div class="small">${esc(fmtTs(last.sentAt))}・${esc(NOTICE_TYPE[last.type] || last.type)}${last.by && last.by !== "auto" ? `（${esc(last.byName || last.by)}）` : ""}</div>`
     : '<span class="muted small">尚無通知紀錄</span>';
-  if (cur) h += `<div class="small ${grant ? "muted" : "warn-t"}">本年度告知：${grant ? esc(fmtTs(grant.sentAt).slice(0, 10)) : "尚未送達"}</div>`;
+  if (cur) {
+    // 特休年度在系統上線前就開始的：當時的告知不在系統裡（請以紙本等紀錄為準），不算漏發
+    const before = !grant && cur.start < (officeCfg.goLive || "0000-00-00");
+    h += `<div class="small ${grant || before ? "muted" : "warn-t"}">本年度告知：${grant ? esc(fmtTs(grant.sentAt).slice(0, 10)) : before ? "系統上線前（無系統紀錄）" : "尚未送達"}</div>`;
+  }
   if (cur && left > 0 && NOTIFY_URL) h += `<button class="small secondary" data-an="${esc(s.empId)}">立即提醒排休</button>`;
   return `<td>${h}</td>`;
 }
