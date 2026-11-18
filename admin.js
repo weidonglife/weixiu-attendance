@@ -8,8 +8,8 @@ import {
   computeMonthReport, leaveBalanceOverview, fmtTimeSec, OT_COMP_LABEL,
   isPart, EMP_TYPE_LABEL, closureWins, closureOf, closureText, notify, callNotify, NOTIFY_URL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY,
   normApproval, topRole, TOP_LABEL, PENDING, stageText, reviewNotes, approvedByText, leaveListOf, LL_KEYS, LL_DAYS, addDays, timelineHtml, annualPeriodInfo, compLots
-} from "./common.js?v=22";
-import { startCalendar } from "./calendar.js?v=7";
+} from "./common.js?v=23";
+import { startCalendar } from "./calendar.js?v=8";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut
@@ -809,7 +809,7 @@ async function loadSettle() {
       const ent = s.hireDate ? annualEntitlement(s.hireDate, today) : null;
       const cur = ent && ent.start ? annualPeriodInfo(s, reqs, ent.start) : null;
       const prev = cur && cur.prevStart ? annualPeriodInfo(s, reqs, cur.prevStart) : null;
-      return { s, ent, cur, prev: prev && prev.end > goLive ? prev : null, comp: compLots(reqs, today), today };
+      return { s, ent, cur, prev: prev && prev.end > goLive ? prev : null, comp: compLots(reqs, today, s.hireDate), today };
     });
     body.innerHTML = settleRows.map(({ s, ent, cur, prev }) => {
       const who = `<td><span class="empno">${esc(s.empId)}</span>${esc(s.name)}</td>`;

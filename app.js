@@ -10,10 +10,10 @@ import {
   , isPart, notify, callNotify, NOTIFY_URL, LINE_OA_ID, addDays, closureWins
   , normApproval, topRole, routeOf, afterSupervisor, canFinal, finalApprover, routeMsg, stageText, reviewNotes,
   approvedByText, TOP_LABEL, PENDING, leaveListOf, LL_DAYS, LEAVE_LABEL, timelineHtml
-} from "./common.js?v=22";
+} from "./common.js?v=23";
 import { onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { startBoard } from "./board.js?v=24";
-import { startCalendar } from "./calendar.js?v=7";
+import { startBoard } from "./board.js?v=25";
+import { startCalendar } from "./calendar.js?v=8";
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot,
   writeBatch, Timestamp
@@ -596,8 +596,8 @@ function checkLeave(r) {
     if (hours > b.annualLeft) return { hours, error: `特休不足：剩餘 ${fmtHours(b.annualLeft)}，這次需要 ${fmtHours(hours)}` };
   }
   if (r.leaveType === "comp") {
-    const sim = compLots([...myReqs, { ...r, id: "__draft", kind: "leave", hours, status: "pending_supervisor" }], todayStr());
-    if (sim.short.__draft) return { hours, error: `補休不足：到 ${r.startDate} 還能用的補休不夠（補休 1 年內要休完，到期就不能用），這次需要 ${fmtHours(hours)}` };
+    const sim = compLots([...myReqs, { ...r, id: "__draft", kind: "leave", hours, status: "pending_supervisor" }], todayStr(), me.hireDate);
+    if (sim.short.__draft) return { hours, error: `補休不足：到 ${r.startDate} 還能用的補休不夠（補休 1 年內、最晚到特休年度結束要休完，到期就不能用），這次需要 ${fmtHours(hours)}` };
   }
   const clash = myReqs.find(x => x.kind === "leave" && ACTIVE_STATUS.includes(x.status) && leaveOverlaps(r, x, holidays));
   if (clash) return { hours, error: `和已申請的假單時間重疊（${reqTitle(clash)}：${reqWhen(clash)}）` };
@@ -763,7 +763,7 @@ function renderBalances() {
       <div class="sub">本年度 ${b.part ? `${b.annualTotal} 小時（兼職按工時比例）` : `${b.ent.days} 天`}，${b.annualCarry ? `＋上年度遞延 ${fmtHours(b.annualCarry)}，` : ""}已用 ${fmtHours(b.annualUsed)}（含審核中${b.annualPre ? `、系統上線前 ${fmtHours(b.annualPre)}` : ""}）<br>年度期間 ${esc(b.ent.start)} ～ ${esc(b.ent.end)}</div></div>`;
   }
   const comp = `<div><div class="sub">補休剩餘</div><div class="num">${fmtHours(b.compLeft)}</div>
-    <div class="sub">加班換得 ${b.compEarned} 小時，已用 ${b.compUsed} 小時${b.compNext ? `<br>${esc(b.compNext.exp)} 前要休完 ${fmtHours(b.compNext.hours)}` : ""}${b.compExpired ? `<br>已到期 ${fmtHours(b.compExpired)}（改發加班費）` : ""}<br>補休 1 年內要休完，先到期的先用</div></div>`;
+    <div class="sub">加班換得 ${b.compEarned} 小時，已用 ${b.compUsed} 小時${b.compNext ? `<br>${esc(b.compNext.exp)} 前要休完 ${fmtHours(b.compNext.hours)}` : ""}${b.compExpired ? `<br>已到期 ${fmtHours(b.compExpired)}（改發加班費）` : ""}<br>補休 1 年內要休完（最晚到特休年度結束），依加班先後順序使用</div></div>`;
   // 今年各假別使用（已核准）
   const year = todayStr().slice(0, 4);
   const used = {};

@@ -229,7 +229,7 @@ export function offDayLabel(s, holidays) {
 //   超過上限時系統會提醒、要求再按一次確認（雇主可以給得比法律多，所以不完全擋）
 export const LEAVE_TYPES = [
   { key: "annual", label: "特休", note: "依年資計算（勞基法第 38 條），工資照給；年度終了未休完應發給工資或經雙方同意遞延一年" },
-  { key: "comp", label: "補休", note: "使用加班換得的補休時數；1 年內要休完，先到期的先用，到期未休完改發加班費" },
+  { key: "comp", label: "補休", note: "使用加班換得的補休時數；依加班先後順序使用，1 年內要休完（但最晚到該特休年度結束），到期未休完改發加班費" },
   { key: "personal", label: "事假", note: "全年 14 日（含家庭照顧假），不給工資", cap: 112, per: "year" },
   { key: "family", label: "家庭照顧假", note: "全年 56 小時（7 日），可以按小時請，併入事假計算；不給工資，但不得因此扣全勤獎金", cap: 56, per: "year" },
   { key: "sick", label: "病假", note: "未住院全年 30 日內工資折半；一年內未超過 10 日，公司不得因此給予不利處分", cap: 240, per: "year" },
@@ -447,13 +447,19 @@ export function annualEntitlement(hireDate, onDate) {
   return { start: addMonths(hireDate, 12 * y), end: addMonths(hireDate, 12 * (y + 1)), days };
 }
 
-// 補休：加班換得的時數 1 年內要休完（勞基法第 32-1 條，期限由勞資約定），先到期的先用
+// 補休：加班換得的時數 1 年內要休完（勞基法第 32-1 條，期限由勞資約定）
+//   施行細則第 22-2 條：依加班先後順序補休；期限超過特休年度（本系統用到職週年制）末日者，以該年度末日為期限
 export const COMP_MONTHS = 12;
-export function compLots(reqs, today) {
+export function compExpiry(date, hireDate) {
+  const exp = addMonths(date, COMP_MONTHS);
+  const ent = hireDate ? annualEntitlement(hireDate, date) : null;
+  return ent && ent.end && ent.end < exp ? ent.end : exp;   // exp＝當天起就不能再用
+}
+export function compLots(reqs, today, hireDate) {
   const active = r => ACTIVE_STATUS.includes(r.status);
   const lots = reqs.filter(r => r.kind === "overtime" && r.comp === "comp" && r.status === "approved")
-    .map(r => ({ id: r.id, date: r.date, exp: addMonths(r.date, COMP_MONTHS), hours: r.hours || 0, left: r.hours || 0 }))
-    .sort((x, y) => x.exp.localeCompare(y.exp));
+    .map(r => ({ id: r.id, date: r.date, exp: compExpiry(r.date, hireDate), hours: r.hours || 0, left: r.hours || 0 }))
+    .sort((x, y) => x.date.localeCompare(y.date) || x.exp.localeCompare(y.exp));
   const uses = reqs.filter(r => r.kind === "leave" && r.leaveType === "comp" && active(r))
     .sort((x, y) => x.startDate.localeCompare(y.startDate));
   const short = {};
@@ -511,7 +517,7 @@ export function computeBalances(reqs, hireDate, today, emp = null) {
   const annualCarry = info ? info.carry : 0;
   const compEarned = sum(reqs.filter(r => r.kind === "overtime" && r.comp === "comp" && r.status === "approved"));
   const compUsed = sum(reqs.filter(r => r.kind === "leave" && r.leaveType === "comp" && active(r)));
-  const cl = compLots(reqs, today);
+  const cl = compLots(reqs, today, hireDate);
   return {
     ent, part, annualTotal, annualUsed, annualPre, annualCarry, annualLeft: annualTotal - annualUsed,
     compEarned, compUsed, compLeft: cl.left, compExpired: cl.expired, compNext: cl.next
