@@ -212,3 +212,9 @@ footer.note { text-align: center; color: var(--muted); font-size: 12px; padding:
 .cal-ev { padding: 8px 10px; margin-bottom: 6px; border-left: 4px solid #8a5cd6; background: #faf8fe; border-radius: 6px; }
 .cal-ev .t { font-size: 15px; }
 .cal-ev .acts { margin-top: 6px; }
+/* 行事曆表單：日期／時間兩欄並排不重疊（iPhone 的日期欄位預設比較寬） */
+.cal-form .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cal-form .row > * { min-width: 0; }
+.cal-form input[type="date"], .cal-form select { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.cal-form input[type="date"] { -webkit-appearance: none; appearance: none; display: block; min-height: 44px; text-align: left; font-size: 15px; }
+.cal-form input[type="date"]::-webkit-date-and-time-value { text-align: left; }
