@@ -6,7 +6,7 @@
 import {
   db, esc, todayStr, addDays, weekdayOf, toHolidayMap, isOffDay, offDayLabel, isMakeupDay, closureOf,
   leaveDaySegments, LEAVE_LABEL, COMPANY_LIST
-} from "./common.js?v=23";
+} from "./common.js?v=26";
 import { lunarOf } from "./lunar.js?v=1";
 import {
   collection, query, where, onSnapshot, doc, getDoc, addDoc, updateDoc, deleteDoc, serverTimestamp

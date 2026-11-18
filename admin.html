@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=31">
+<link rel="stylesheet" href="style.css?v=33">
 </head>
 <body>
 <header class="top">
@@ -318,22 +318,23 @@
           <h2 style="margin:0">特休年度結算</h2>
           <button id="stXlsx" class="secondary" style="flex:0 0 auto">下載 Excel</button>
         </div>
-        <p class="muted">依勞基法第 38 條：特休年度結束還沒休完的，要折算工資發給員工；或雙方同意後遞延到下一年度（遞延過去仍沒休完的，下一年度結束時一定要發工資，不能再遞延）。<br>
+        <p class="muted">特休通知（施行細則第 24 條第 3 項、第 24-2 條）：每天 09:00 自動用 LINE 通知——新特休年度開始 30 日內告知天數與可休期間；年度剩 60 天、30 天還有沒休的，提醒排休。每次發送都留存紀錄（「特休通知」欄），可作為公司已告知的證明；沒綁定 LINE 的同仁請改用書面或 Email 告知。<br>
+          依勞基法第 38 條：特休年度結束還沒休完的，要折算工資發給員工；或雙方同意後遞延到下一年度（遞延過去仍沒休完的，下一年度結束時一定要發工資，不能再遞延）。<br>
           只列出系統上線後才結束的年度；上線前的年度請照舊方式處理。未休時數以「每小時工資」折算，金額請由薪資計算。</p>
         <p id="stMsg" class="msg hidden"></p>
         <div class="table-scroll">
           <table>
-            <thead><tr><th>員工</th><th>已結束年度</th><th>應休</th><th>已休</th><th>未休</th><th>處理</th><th>本年度</th><th>剩餘</th></tr></thead>
+            <thead><tr><th>員工</th><th>已結束年度</th><th>應休</th><th>已休</th><th>未休</th><th>處理</th><th>本年度</th><th>剩餘</th><th>特休通知</th></tr></thead>
             <tbody id="stBody"></tbody>
           </table>
         </div>
       </div>
       <div class="card">
         <h2>補休到期</h2>
-        <p class="muted">補休依加班先後順序使用，1 年內要休完，但最晚到該員工的特休年度結束（施行細則第 22-2 條）；到期沒休完的時數要改發加班費，於下次發薪日或到期後 30 天內發給（勞基法第 32-1 條）。</p>
+        <p class="muted">補休依加班先後順序使用，1 年內要休完，但最晚到該員工的特休年度結束（施行細則第 22-2 條）；到期沒休完的時數要改發加班費，於下次發薪日或到期後 30 天內發給（勞基法第 32-1 條）。發給後請按「已發給」留下紀錄（公司須能舉證）；最近 90 天的發給紀錄會列在下方，全部紀錄在 Excel 的「補休折發紀錄」。<br>員工離職時，在「員工管理」按「停用」會先列出未休特休、補休，確認後一併記錄為離職結算。</p>
         <div class="table-scroll">
           <table>
-            <thead><tr><th>員工</th><th>加班日期</th><th>到期日</th><th>未休時數</th><th>狀態</th></tr></thead>
+            <thead><tr><th>員工</th><th>加班日期</th><th>補休期限</th><th>未休時數</th><th>狀態</th></tr></thead>
             <tbody id="ctBody"></tbody>
           </table>
         </div>
@@ -360,6 +361,6 @@
   </div>
 </div>
 
-<script type="module" src="admin.js?v=34"></script>
+<script type="module" src="admin.js?v=36"></script>
 </body>
 </html>

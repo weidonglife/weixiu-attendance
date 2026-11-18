@@ -6,6 +6,8 @@ import {
 import {
   getFirestore, doc, getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { parseD, fmtD, addDays, addMonths, isPart, ACTIVE_STATUS, HOURS_PER_DAY, annualEntitlement, annualPeriodInfo } from "./leavecalc.js?v=1";
+export { addDays, addMonths, isPart, ACTIVE_STATUS, HOURS_PER_DAY, annualEntitlement, annualPeriodInfo };
 
 // Firebase 連線設定（這組設定本來就是公開的，安全性由資料庫規則把關）
 export const firebaseConfig = {
@@ -29,7 +31,6 @@ export const WORK = { start: "08:00", lateAfter: "08:10", end: "17:00" };
 export const DEFAULT_RADIUS = 200; // 公尺
 // 員工身分：full 正職、part 兼職（時間不固定，只記工時）。舊資料沒有這個欄位＝正職
 export const EMP_TYPE_LABEL = { full: "正職", part: "兼職" };
-export function isPart(u) { return !!u && u.empType === "part"; }
 export const FULLTIME_YEAR_HOURS = 2080; // 正職一年的正常工時（每週 40 小時 × 52 週），兼職特休按比例試算用
 const EMAIL_DOMAIN = "staff.weixiu-attendance.app"; // 內部用的虛擬信箱網域，不會寄信
 
@@ -169,21 +170,7 @@ export const MODE_LABEL = { office: "內勤", field: "外勤", correction: "補�
 export const TYPE_LABEL = { in: "上班", out: "下班" };
 
 // ===== 日期字串工具（格式 YYYY-MM-DD）=====
-function parseD(s) { const [y, m, d] = s.split("-").map(Number); return { y, m, d }; }
-function fmtD(y, m, d) { return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`; }
 export function todayStr() { const p = twParts(new Date()); return `${p.year}-${p.month}-${p.day}`; }
-export function addDays(s, n) {
-  const { y, m, d } = parseD(s);
-  const t = new Date(Date.UTC(y, m - 1, d + n));
-  return fmtD(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate());
-}
-export function addMonths(s, n) {
-  const { y, m, d } = parseD(s);
-  const total = y * 12 + (m - 1) + n;
-  const ny = Math.floor(total / 12), nm = total % 12 + 1;
-  const dim = new Date(Date.UTC(ny, nm, 0)).getUTCDate();
-  return fmtD(ny, nm, Math.min(d, dim));
-}
 export function weekdayOf(s) { const { y, m, d } = parseD(s); return new Date(Date.UTC(y, m - 1, d)).getUTCDay(); }
 export function ymOfStr(s) { return Number(s.slice(0, 4) + s.slice(5, 7)); }
 export function fmtDateStr(s) { return `${s.slice(5, 7)}/${s.slice(8, 10)}（${WEEK[weekdayOf(s)]}）`; }
@@ -282,10 +269,8 @@ export const STATUS_INFO = {
   rejected: ["late", "已駁回"],
   cancelled: ["gray", "已取消"]
 };
-export const ACTIVE_STATUS = ["pending_supervisor", "pending_admin", "approved"];
 export const OT_COMP_LABEL = { pay: "加班費", comp: "換補休" };
 export const OT_MONTH_LIMIT = 46;
-export const HOURS_PER_DAY = 8;
 
 // ===================================================================
 // 簽核流程（settings/approval：{ chief: 主官員工編號, deputy: 副主官員工編號 }）
@@ -434,18 +419,6 @@ export function calcOtHours(start, end) {
   return (toMin(end) - toMin(start)) / 60;
 }
 
-// 特休：依勞基法第 38 條，以到職日（週年制）計算目前這一年度的天數與期間
-export function annualEntitlement(hireDate, onDate) {
-  if (!hireDate) return null;
-  const sixMonths = addMonths(hireDate, 6);
-  if (onDate < sixMonths) return { start: null, end: sixMonths, days: 0 };
-  let k = 6;
-  while (k < 1200 && addMonths(hireDate, k + 1) <= onDate) k++;
-  if (k < 12) return { start: sixMonths, end: addMonths(hireDate, 12), days: 3 };
-  const y = Math.floor(k / 12);
-  const days = y === 1 ? 7 : y === 2 ? 10 : y <= 4 ? 14 : y <= 9 ? 15 : Math.min(30, 15 + (y - 9));
-  return { start: addMonths(hireDate, 12 * y), end: addMonths(hireDate, 12 * (y + 1)), days };
-}
 
 // 補休：加班換得的時數 1 年內要休完（勞基法第 32-1 條，期限由勞資約定）
 //   施行細則第 22-2 條：依加班先後順序補休；期限超過特休年度（本系統用到職週年制）末日者，以該年度末日為期限
@@ -491,24 +464,6 @@ export function compLots(reqs, today, hireDate, paid = {}) {
   };
 }
 
-// 特休年度結算：users.annualSettle = { 年度起算日: { pay: 發給工資的時數, defer: 遞延到下一年度的時數, at, by } }
-// 某年度的特休總額（含上一年度遞延過來的）、已休、未休
-export function annualPeriodInfo(emp, reqs, start) {
-  if (!emp || !emp.hireDate || !start) return null;
-  const ent = annualEntitlement(emp.hireDate, start);
-  if (!ent || ent.start !== start) return null;
-  const part = isPart(emp);
-  const base = part ? Number(emp.partAnnualHours) || 0 : ent.days * HOURS_PER_DAY;
-  const prev = annualEntitlement(emp.hireDate, addDays(start, -1));
-  const carry = prev && prev.start ? Number(((emp.annualSettle || {})[prev.start] || {}).defer) || 0 : 0;
-  const pre = emp.preAnnualFrom === start ? Number(emp.preAnnualHours) || 0 : 0;
-  const used = reqs.filter(r => r.kind === "leave" && r.leaveType === "annual" && ACTIVE_STATUS.includes(r.status)
-    && r.startDate >= ent.start && r.startDate < ent.end).reduce((a, r) => a + (r.hours || 0), 0) + pre;
-  const total = base + carry, unused = Math.max(0, total - used);
-  const payOnly = Math.min(unused, Math.max(0, carry - used));   // 遞延過來沒休完的，不能再遞延，一定要發工資
-  return { start: ent.start, end: ent.end, days: ent.days, base, carry, pre, used, total, unused, payOnly,
-    deferrable: unused - payOnly, settle: (emp.annualSettle || {})[ent.start] || null, prevStart: prev ? prev.start : null };
-}
 
 // 計算特休、補休餘額。reqs：該員工所有申請
 // 兼職：特休時數由管理員依比例設定（partAnnualHours），不套用正職天數
