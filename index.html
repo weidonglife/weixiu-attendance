@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=23">
 <link rel="stylesheet" href="board.css?v=20">
 </head>
 <body>
@@ -63,9 +63,11 @@
       <button data-tab="pLeave" type="button">請假／加班</button>
       <button data-tab="pBoard" type="button">今日出勤</button>
       <button data-tab="pReview" id="tabReview" class="hidden" type="button">待我審核 <span id="revCount"></span></button>
+      <button data-tab="pCal" id="tabCal" class="hidden" type="button">出勤月曆</button>
     </div>
 
   <section id="pBoard" class="hidden"><div id="boardRoot"></div></section>
+  <section id="pCal" class="hidden"><div class="card"><div id="calRoot"></div></div></section>
 
   <section id="pPunch">
     <div class="card clock">
@@ -228,6 +230,6 @@
   <footer class="note">唯修科技 · 傳創機電 · 唯校中心</footer>
 </div>
 
-<script type="module" src="app.js?v=23"></script>
+<script type="module" src="app.js?v=24"></script>
 </body>
 </html>

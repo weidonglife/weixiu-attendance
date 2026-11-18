@@ -9,6 +9,7 @@ import {
   isPart, EMP_TYPE_LABEL, closureWins, closureOf, closureText, notify, callNotify, NOTIFY_URL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY,
   normApproval, topRole, TOP_LABEL, PENDING, stageText, reviewNotes, approvedByText, leaveListOf, LL_KEYS, LL_DAYS, addDays
 } from "./common.js?v=19";
+import { startCalendar } from "./calendar.js?v=1";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut
@@ -64,11 +65,13 @@ $("loginPw").addEventListener("keydown", e => { if (e.key === "Enter") $("btnLog
 document.querySelectorAll(".btnLogout").forEach(b => b.onclick = () => logout());
 
 // ===== 分頁 =====
-const TABS = ["tToday", "tReport", "tStaff", "tCor", "tReq", "tRec", "tOffice", "tHol"];
+const TABS = ["tToday", "tCal", "tReport", "tStaff", "tCor", "tReq", "tRec", "tOffice", "tHol"];
+let calStop = null;
 document.querySelectorAll(".tabs button[data-tab]").forEach(btn => {
   btn.onclick = () => {
     document.querySelectorAll(".tabs button[data-tab]").forEach(b => b.classList.toggle("on", b === btn));
     TABS.forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.tab));
+    if (btn.dataset.tab === "tCal" && !calStop) calStop = startCalendar($("calRoot"));
   };
 });
 
@@ -103,7 +106,7 @@ async function loadApprovedLeaves() {
 
 // 主管看的「全員請假一覽」：每張假單一筆精簡資料（不含事由），跟著假單狀態同步
 async function syncLeaveList() {
-  const from = addDays(todayStr(), -LL_DAYS * 2);
+  const from = addDays(todayStr(), -400); // 月曆可以往回看約一年
   const [rs, ls] = await Promise.all([
     getDocs(query(collection(db, "requests"), where("kind", "==", "leave"))),
     getDocs(collection(db, "leaveList"))

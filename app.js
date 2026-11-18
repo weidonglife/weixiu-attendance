@@ -13,6 +13,7 @@ import {
 } from "./common.js?v=19";
 import { onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { startBoard } from "./board.js?v=21";
+import { startCalendar } from "./calendar.js?v=1";
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot,
   writeBatch, Timestamp
@@ -28,6 +29,7 @@ let holidays = new Map(); // 國定假日
 let myReqs = [];      // 我的請假／加班申請
 let mode = "office";  // office | field
 let boardStop = null; // 今日出勤看板（點分頁時才啟動）
+let calStop = null;   // 出勤月曆（主管才有，點分頁時才啟動）
 let approval = normApproval(null); // 主官／副主官設定
 let dirList = [];     // 員工名單（顯示姓名用）
 const deviceId = getDeviceId();
@@ -119,7 +121,8 @@ $("btnLogout").onclick = $("btnBlockedLogout").onclick = () => logout();
 document.querySelectorAll("#mainTabs button[data-tab]").forEach(btn => {
   btn.onclick = () => {
     document.querySelectorAll("#mainTabs button[data-tab]").forEach(b => b.classList.toggle("on", b === btn));
-    ["pPunch", "pLeave", "pBoard", "pReview"].forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.tab));
+    ["pPunch", "pLeave", "pBoard", "pReview", "pCal"].forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.tab));
+    if (btn.dataset.tab === "pCal" && !calStop) calStop = startCalendar($("calRoot"));
     if (btn.dataset.tab === "pBoard" && !boardStop) boardStop = startBoard($("boardRoot"));
   };
 });
@@ -774,6 +777,7 @@ function loadReview() {
 
   const show = isSup || !!myTop() || teamReqs.length > 0 || teamCors.length > 0;
   $("tabReview").classList.toggle("hidden", !show);
+  $("tabCal").classList.toggle("hidden", !(isSup || myTop()));
   if ((isSup || myTop()) && !llUnsub) watchLeaveList();
   const n = items.length;
   $("revCount").textContent = n ? `(${n})` : "";
