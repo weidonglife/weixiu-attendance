@@ -59,14 +59,16 @@
     <section id="tCal" class="hidden">
       <div class="card"><div id="calRoot"></div></div>
       <div class="card">
-        <h2>Google 日曆訂閱連結</h2>
-        <p class="muted">系統每 30 分鐘會把公司活動、放假和已核准的請假同步到兩個 Google 日曆。請到 Google 日曆的設定，把兩個日曆的「iCal 格式的私人網址」分別貼在下面，員工就能在「我的設定」一鍵加到手機。</p>
-        <label for="calLinkAll">員工版（唯修集團 行事曆）：請假只寫「請假」</label>
-        <input id="calLinkAll" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics">
-        <label for="calLinkSup">主管版（唯修集團 行事曆（主管版））：請假寫出假別，只有主管看得到</label>
-        <input id="calLinkSup" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics">
-        <button id="btnCalLinks" style="margin-top:12px">儲存訂閱連結</button>
-        <div id="calLinkMsg" class="msg hidden"></div>
+        <h2>手機行事曆訂閱（每人專屬連結）</h2>
+        <p class="muted">每位同仁在「我的設定」會拿到自己專屬的訂閱連結。手機日曆來更新時，系統依這個人「現在」的身分給內容：主管、主官、副主官、管理員看到主管版（請假寫出假別），其他人看到員工版（只寫「請假」），停用帳號看到空的日曆。人事異動不用做任何事。<br>
+          如果某人的連結外流，按「作廢」，舊連結就會失效；他下次打開「我的設定」會自動拿到新連結，需要重新訂閱一次。</p>
+        <div id="ctMsg" class="msg hidden"></div>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>員工</th><th>目前會看到</th><th>連結</th><th></th></tr></thead>
+            <tbody id="calTokBody"></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -358,6 +360,6 @@
   </div>
 </div>
 
-<script type="module" src="admin.js?v=31"></script>
+<script type="module" src="admin.js?v=32"></script>
 </body>
 </html>

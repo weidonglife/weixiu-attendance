@@ -636,29 +636,36 @@ $("btnResetPw").onclick = async () => {
   $("btnResetPw").disabled = false;
 };
 
-// ===== Google 日曆訂閱連結 =====
+// ===== 手機行事曆訂閱：每人專屬連結（calTokens/{uid}）=====
 async function loadCalLinksAdmin() {
+  const body = $("calTokBody");
+  body.innerHTML = `<tr><td colspan="4" class="muted">讀取中…</td></tr>`;
   try {
-    const [a, s] = await Promise.all([getDoc(doc(db, "settings", "calendarLinks")), getDoc(doc(db, "settings", "calendarSup"))]);
-    $("calLinkAll").value = a.exists() ? a.data().all || "" : "";
-    $("calLinkSup").value = s.exists() ? s.data().sup || "" : "";
-  } catch (e) { console.warn("calLinks", e); }
+    const [snap, sv] = await Promise.all([getDocs(collection(db, "calTokens")), getDoc(doc(db, "settings", "supervisors"))]);
+    const has = new Map(snap.docs.map(d => [d.id, d.data()]));
+    const sups = new Set(sv.exists() ? sv.data().ids || [] : []);
+    body.innerHTML = staff.map(s => {
+      const sup = s.role === "admin" || !!topRole(approval, s.empId) || sups.has(s.empId);
+      const t = has.get(s.uid);
+      return `<tr><td><span class="empno">${esc(s.empId)}</span>${esc(s.name)}</td>
+        <td>${sup ? '<span class="tag field">主管版</span>' : '<span class="tag gray">員工版</span>'}</td>
+        <td>${t ? '<span class="tag ok">已產生</span>' : '<span class="muted">尚未打開</span>'}</td>
+        <td>${t ? `<button class="small danger" data-ct="${s.uid}">作廢</button>` : ""}</td></tr>`;
+    }).join("") || `<tr><td colspan="4" class="muted">沒有員工</td></tr>`;
+  } catch (e) { body.innerHTML = `<tr><td colspan="4">${esc(errMsg(e))}</td></tr>`; }
 }
-const ICS_RE = /^https:\/\/calendar\.google\.com\/calendar\/ical\/[^\s]+\.ics$/;
-$("btnCalLinks").onclick = async () => {
-  const all = $("calLinkAll").value.trim(), sup = $("calLinkSup").value.trim();
-  for (const [v, n] of [[all, "員工版"], [sup, "主管版"]]) {
-    if (v && !ICS_RE.test(v)) { showMsg($("calLinkMsg"), `${n}的網址格式不對，應該是 https://calendar.google.com/calendar/ical/…/basic.ics`, "err"); return; }
-  }
-  if (all && all === sup) { showMsg($("calLinkMsg"), "員工版和主管版不能是同一個網址", "err"); return; }
+$("calTokBody").addEventListener("click", async e => {
+  const btn = e.target.closest("button[data-ct]");
+  if (!btn) return;
+  if (btn.dataset.sure !== "1") { btn.dataset.sure = "1"; btn.textContent = "確定作廢？"; return; }
+  btn.disabled = true;
   try {
-    await Promise.all([
-      setDoc(doc(db, "settings", "calendarLinks"), { all, updatedAt: serverTimestamp() }),
-      setDoc(doc(db, "settings", "calendarSup"), { sup, updatedAt: serverTimestamp() })
-    ]);
-    showMsg($("calLinkMsg"), "已儲存。員工到「我的設定」就能把行事曆加到手機。", "ok");
-  } catch (e) { showMsg($("calLinkMsg"), errMsg(e), "err"); }
-};
+    await updateDoc(doc(db, "calTokens", btn.dataset.ct), { token: "revoked", at: serverTimestamp() });
+    const s = staff.find(x => x.uid === btn.dataset.ct);
+    showMsg($("ctMsg"), `${s ? s.name : ""} 的舊連結已作廢`, "ok");
+    loadCalLinksAdmin();
+  } catch (err) { showMsg($("ctMsg"), errMsg(err), "err"); btn.disabled = false; }
+});
 
 // ===== 簽核設定：主官／副主官 =====
 async function loadApproval() {

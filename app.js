@@ -124,21 +124,28 @@ function openCalendar() {
   calStop = startCalendar($("calRoot"), { me, full: calFull, admin: me && me.role === "admin" });
 }
 
-// Google 日曆／手機行事曆訂閱連結：主管拿主管版（請假含假別），其他人拿員工版
-let calLinks = { all: "", sup: "" };
-async function loadCalLinks() {
-  try { const s = await getDoc(doc(db, "settings", "calendarLinks")); calLinks.all = s.exists() ? s.data().all || "" : ""; } catch (e) { }
-  if (isSup || myTop() || (me && me.role === "admin")) {
-    try { const s = await getDoc(doc(db, "settings", "calendarSup")); calLinks.sup = s.exists() ? s.data().sup || "" : ""; } catch (e) { }
-  }
+// 手機行事曆訂閱：每人專屬連結（calTokens/{uid}）。內容由通知服務依「現在」的身分決定主管版或員工版
+let calToken = "";
+function newToken() {
+  const a = new Uint8Array(20); crypto.getRandomValues(a);
+  return [...a].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+async function loadCalLinks(renew = false) {
+  try {
+    const ref = doc(db, "calTokens", me.uid);
+    const s = renew ? null : await getDoc(ref);
+    const t = s && s.exists() ? s.data().token || "" : "";
+    if (/^[0-9a-f]{40}$/.test(t)) calToken = t;
+    else { calToken = newToken(); await setDoc(ref, { token: calToken, at: serverTimestamp() }); }
+  } catch (e) { console.warn("calToken", e); calToken = ""; }
   renderCalLink();
 }
 function renderCalLink() {
   const box = $("calLinkBody");
   if (!box) return;
-  const sup = !!calLinks.sup && (isSup || !!myTop() || (me && me.role === "admin"));
-  const url = sup ? calLinks.sup : calLinks.all;
-  if (!url) { box.innerHTML = `<p class="muted">管理員還沒設定訂閱連結。</p>`; return; }
+  if (!calToken || !NOTIFY_URL) { box.innerHTML = `<p class="muted">暫時無法取得訂閱連結，請稍後再試。</p>`; return; }
+  const sup = isSup || !!myTop() || (me && me.role === "admin");
+  const url = `${NOTIFY_URL}?ics=${calToken}`;
   const webcal = url.replace(/^https?:\/\//, "webcal://");
   const gcal = "https://calendar.google.com/calendar/r?cid=" + encodeURIComponent(webcal);
   box.innerHTML = `<p class="muted" style="margin-top:-6px">把公司行事曆${sup ? "（主管版：請假會寫出假別）" : ""}加到手機，公司活動、放假和請假會自動出現，也可以用手機的提醒功能。</p>
@@ -147,9 +154,16 @@ function renderCalLink() {
       <a class="btnlink" href="${esc(gcal)}" target="_blank" rel="noopener">加到 Google 日曆</a>
       <button type="button" class="secondary small" id="btnCopyCal">複製連結</button>
     </div>
-    <p class="muted" style="font-size:12px">Android 手機請按「加到 Google 日曆」，用你的 Google 帳號登入後按「新增」。Google 日曆大約每半天更新一次，iPhone 可以在設定裡改成更常更新。這個連結請不要分享給公司以外的人。</p>`;
+    <p class="muted" style="font-size:12px">這是你專屬的連結，請不要分享給別人。Android 手機請按「加到 Google 日曆」，用你的 Google 帳號登入後按「新增」。Google 日曆大約每幾小時更新一次。<br>
+      懷疑連結外流？<a href="#" id="btnRenewCal">換一個新連結</a>（舊的會失效，要重新訂閱一次）</p>`;
   $("btnCopyCal").onclick = async () => {
     try { await navigator.clipboard.writeText(url); $("btnCopyCal").textContent = "已複製"; } catch (e) { prompt("請複製這個連結", url); }
+  };
+  $("btnRenewCal").onclick = async ev => {
+    ev.preventDefault();
+    const a = ev.target;
+    if (a.dataset.sure !== "1") { a.dataset.sure = "1"; a.textContent = "確定要換？再按一次"; return; }
+    await loadCalLinks(true);
   };
 }
 
