@@ -229,3 +229,9 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .tl { margin: 6px 0 2px; padding: 6px 10px; background: #f6f8fb; border-radius: 8px; font-size: 13px; color: var(--muted); line-height: 1.7; }
 .tl .tl-i { display: inline-block; width: 1.6em; }
 td .tl { margin-top: 4px; padding: 4px 8px; font-size: 12px; }
+.cc.trip { background: #e0f4f1; color: #127566; }
+.cc.trn { background: #fdf0d9; color: #9a5b00; }
+.cal-ev.trip { border-left-color: #1a9c88; background: #f5fbfa; }
+.cal-ev.trn { border-left-color: #d98a12; background: #fffaf2; }
+.cal-ev .cc.cat { display: inline-block; font-size: 11px; vertical-align: 2px; }
+.cal-head [data-c="cat"] { width: auto; }

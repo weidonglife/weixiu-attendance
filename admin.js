@@ -9,7 +9,7 @@ import {
   isPart, EMP_TYPE_LABEL, closureWins, closureOf, closureText, notify, callNotify, NOTIFY_URL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY,
   normApproval, topRole, TOP_LABEL, PENDING, stageText, reviewNotes, approvedByText, leaveListOf, LL_KEYS, LL_DAYS, addDays, timelineHtml
 } from "./common.js?v=20";
-import { startCalendar } from "./calendar.js?v=4";
+import { startCalendar } from "./calendar.js?v=5";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut
@@ -464,6 +464,11 @@ function fillEdit() {
   $("eSup").value = s.supervisorEmpId || "";
   $("eType").value = isPart(s) ? "part" : "full";
   $("ePartAnnual").value = s.partAnnualHours ?? "";
+  const entP = annualEntitlement(s.hireDate, todayStr());
+  $("ePreAnnual").value = entP && entP.start && s.preAnnualFrom === entP.start ? (s.preAnnualHours ?? "") : "";
+  $("ePreHint").textContent = entP && entP.start
+    ? `舊休假表上、本特休年度（${entP.start} ～ ${entP.end}）已經休過的特休。會一起從「特休剩餘」扣掉；到下一個特休年度就不再扣。`
+    : "這位員工目前還沒有特休（未滿 6 個月或沒填到職日），不用填。";
   $("ePartCalc").textContent = "兼職特休＝同年資正職的特休時數 ×（過去一年實際工時 ÷ 2080 小時）。可以先按「試算」，再自行調整。";
   togglePartBox();
 }
@@ -510,6 +515,12 @@ $("btnPartCalc").onclick = async () => {
   $("btnPartCalc").disabled = false;
 };
 
+// 系統上線前已休特休：記下是哪一個特休年度（到了下一個年度自動不再扣）
+function preAnnualFields(hireDate, val) {
+  const ent = annualEntitlement(hireDate, todayStr());
+  if (val === "" || val == null || !ent || !ent.start) return { preAnnualHours: null, preAnnualFrom: null };
+  return { preAnnualHours: Math.max(0, Math.round(Number(val) * 2) / 2), preAnnualFrom: ent.start };
+}
 $("btnEdit").onclick = async () => {
   const msg = $("eMsg");
   const s = staff.find(x => x.uid === $("eEmp").value);
@@ -524,7 +535,8 @@ $("btnEdit").onclick = async () => {
       hireDate: $("eHire").value || null,
       supervisorEmpId: $("eSup").value || null,
       empType: $("eType").value,
-      partAnnualHours: $("eType").value === "part" && $("ePartAnnual").value !== "" ? Math.max(0, Number($("ePartAnnual").value)) : null
+      partAnnualHours: $("eType").value === "part" && $("ePartAnnual").value !== "" ? Math.max(0, Number($("ePartAnnual").value)) : null,
+      ...preAnnualFields($("eHire").value || null, $("ePreAnnual").value)
     });
     showMsg(msg, `已更新 ${name} 的資料` + (s.company !== $("eCompany").value ? `。公司已改為「${$("eCompany").value}」，之後的打卡會記在新公司；改之前的紀錄維持原公司。` : ""), "ok");
     await loadStaff();
@@ -610,6 +622,7 @@ $("btnResetPw").onclick = async () => {
       empId: s.empId, name: s.name, company: s.company, role: s.role,
       hireDate: s.hireDate || null, supervisorEmpId: s.supervisorEmpId || null,
       empType: s.empType || "full", partAnnualHours: s.partAnnualHours ?? null,
+      preAnnualHours: s.preAnnualHours ?? null, preAnnualFrom: s.preAnnualFrom ?? null,
       active: true, deviceId: s.deviceId || null, mustChangePassword: true, createdAt: serverTimestamp()
     });
     batch.update(doc(db, "users", s.uid), { active: false, replacedBy: cred.user.uid });

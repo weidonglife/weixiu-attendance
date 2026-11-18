@@ -12,6 +12,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const WK = ["日", "一", "二", "三", "四", "五", "六"];
+// 活動類別：一般（紫）、行程（綠藍）、訓練（橘黃）
+const CAT = { "": ["一般", "ev"], trip: ["行程", "trip"], training: ["訓練", "trn"] };
+const catOf = e => CAT[e.category || ""] || CAT[""];
 const hh = n => `${String(n).padStart(2, "0")}:00`;
 const ymdNum = s => Number(s.replace(/-/g, ""));
 const PEND = ["pending_supervisor", "pending_admin"];
@@ -25,6 +28,7 @@ export function startCalendar(root, opts = {}) {
   let ym = today.slice(0, 7);          // 目前顯示的月份 YYYY-MM
   let sel = today;                     // 選取的日期
   let company = "";
+  let catF = "*";                      // 活動類別篩選
   let holidays = new Map();
   let leaves = [], shifts = [], events = [];
   let unsubs = [];
@@ -40,8 +44,9 @@ export function startCalendar(root, opts = {}) {
       <button type="button" class="secondary small" data-c="today">今天</button>
       <button type="button" class="small" data-c="add">＋ 新增活動</button>
       <select data-c="company" aria-label="公司"><option value="">全部公司</option>${COMPANY_LIST.map(c => `<option>${esc(c)}</option>`).join("")}</select>
+      <select data-c="cat" aria-label="活動類別"><option value="*">全部活動</option>${Object.entries(CAT).map(([k, [n]]) => `<option value="${k}">${n}</option>`).join("")}<option value="none">不顯示活動</option></select>
     </div>
-    <div class="cal-legend"><span class="cc ev">公司活動</span><span class="cc ok">請假${full ? "（已核准）" : ""}</span>${full ? `<span class="cc pend">審核中</span>` : ""}<span class="cc shift">兼職預告</span><span class="cal-hol-l">紅字＝放假</span></div>
+    <div class="cal-legend"><span class="cc ev">一般活動</span><span class="cc trip">行程</span><span class="cc trn">訓練</span><span class="cc ok">請假${full ? "（已核准）" : ""}</span>${full ? `<span class="cc pend">審核中</span>` : ""}<span class="cc shift">兼職預告</span><span class="cal-hol-l">紅字＝放假</span></div>
     <div class="cal-grid" data-c="grid"></div>
     <div class="cal-form hidden" data-c="form"></div>
     <div class="cal-day" data-c="day"></div>
@@ -90,6 +95,7 @@ export function startCalendar(root, opts = {}) {
     const slot = d => (m[d] = m[d] || { ev: [], lv: [], sh: [] });
     for (const e of events) {
       if (company && e.company && e.company !== company) continue;
+      if (catF === "none" || (catF !== "*" && (e.category || "") !== catF)) continue;
       for (let d = e.startDate, i = 0; d <= e.endDate && i < 62; d = addDays(d, 1), i++) slot(d).ev.push(e);
     }
     for (const r of leaves) {
@@ -126,7 +132,7 @@ export function startCalendar(root, opts = {}) {
       const off = isOffDay(d, holidays), hol = holidays.has(d) ? holidays.get(d) : "", cl = closureOf(d, holidays);
       const cls = ["cd", d.slice(0, 7) !== ym ? "out" : "", off ? "off" : "", d === today ? "today" : "", d === sel ? "sel" : ""].filter(Boolean).join(" ");
       const chips = [
-        ...day.ev.map(e => `<span class="cc ev">${e.allDay ? "" : esc(e.startTime) + " "}${esc(e.title)}</span>`),
+        ...day.ev.map(e => `<span class="cc ${catOf(e)[1]}">${e.allDay ? "" : esc(e.startTime) + " "}${esc(e.title)}</span>`),
         ...day.lv.map(x => `<span class="cc ${x.r.status === "approved" ? "ok" : "pend"}">${esc(x.r.name)}</span>`),
         ...day.sh.map(s => `<span class="cc shift">${esc(s.name)}</span>`)
       ];
@@ -148,8 +154,8 @@ export function startCalendar(root, opts = {}) {
     if (errText) h += `<p class="msg err">${esc(errText)}</p>`;
 
     h += `<h4>公司活動</h4>`;
-    h += day.ev.length ? day.ev.map(e => `<div class="cal-ev">
-        <div class="t"><b>${esc(e.title)}</b>${e.company ? ` <span class="tag gray">${esc(e.company)}</span>` : ""}</div>
+    h += day.ev.length ? day.ev.map(e => `<div class="cal-ev ${catOf(e)[1]}">
+        <div class="t"><span class="cc ${catOf(e)[1]} cat">${catOf(e)[0]}</span> <b>${esc(e.title)}</b>${e.company ? ` <span class="tag gray">${esc(e.company)}</span>` : ""}</div>
         <div class="meta">${e.startDate === e.endDate ? "" : `${esc(e.startDate.slice(5))} ～ ${esc(e.endDate.slice(5))}　`}${evTime(e)}${e.location ? `　📍 ${esc(e.location)}` : ""}</div>
         ${e.note ? `<div class="meta">${esc(e.note)}</div>` : ""}
         <div class="meta muted">建立：${esc(e.createdByName || e.createdBy || "")}</div>
@@ -190,6 +196,7 @@ export function startCalendar(root, opts = {}) {
       </div>
       <label>地點（選填）</label><input data-f="location" maxlength="60" value="${esc(v.location)}">
       <label>說明（選填）</label><textarea data-f="note" maxlength="300" rows="2">${esc(v.note)}</textarea>
+      <label>類別</label><select data-f="category">${Object.entries(CAT).map(([k, [n]]) => `<option value="${k}"${k === (v.category || "") ? " selected" : ""}>${n}</option>`).join("")}</select>
       <label>對象</label><select data-f="company"><option value="">全體同仁</option>${COMPANY_LIST.map(c => `<option${c === v.company ? " selected" : ""}>${esc(c)}</option>`).join("")}</select>
       <div class="acts" style="margin-top:12px">
         <button type="button" data-c="save">${editing.id ? "儲存修改" : "新增活動"}</button>
@@ -209,7 +216,7 @@ export function startCalendar(root, opts = {}) {
     const d = {
       title: g("title").value.trim(), startDate: g("startDate").value, endDate: g("endDate").value || g("startDate").value,
       allDay: g("allDay").checked, startTime: null, endTime: null,
-      location: g("location").value.trim(), note: g("note").value.trim(), company: g("company").value
+      location: g("location").value.trim(), note: g("note").value.trim(), company: g("company").value, category: g("category").value
     };
     if (!d.allDay) { d.startTime = g("startTime").value; d.endTime = g("endTime").value; }
     if (!d.title) return fmsg("請輸入活動名稱", "err");
@@ -264,6 +271,7 @@ export function startCalendar(root, opts = {}) {
     }
   });
   $c("company").onchange = e => { company = e.target.value; render(); };
+  $c("cat").onchange = e => { catF = e.target.value; render(); };
 
   subscribe(); render();
   return () => unsubs.splice(0).forEach(u => u());

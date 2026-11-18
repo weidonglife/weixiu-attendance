@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=29">
+<link rel="stylesheet" href="style.css?v=30">
 </head>
 <body>
 <header class="top">
@@ -225,6 +225,10 @@
           </div>
           <p id="ePartCalc" class="muted" style="margin:6px 0 0">兼職特休＝同年資正職的特休時數 ×（過去一年實際工時 ÷ 2080 小時）。可以先按「試算」，再自行調整。</p>
         </div>
+        <div class="row" style="margin-top:10px">
+          <div><label for="ePreAnnual">系統上線前已休特休（小時）</label><input id="ePreAnnual" type="number" min="0" step="0.5" placeholder="沒有就留空"></div>
+        </div>
+        <p id="ePreHint" class="muted" style="margin:6px 0 0">舊休假表上、本特休年度已經休過的特休。會一起從「特休剩餘」扣掉，只算目前這個特休年度。</p>
         <button id="btnEdit" style="margin-top:12px">儲存變更</button>
         <div id="eMsg" class="msg hidden"></div>
         <p class="muted">直屬主管會在自己的打卡頁看到「待我審核」。1 天以內的申請直屬主管核准就生效；超過 1 天再送副主官核定（主官也可以）。沒有設定直屬主管的員工，申請會直接送副主官。</p>
@@ -325,6 +329,6 @@
   </div>
 </div>
 
-<script type="module" src="admin.js?v=28"></script>
+<script type="module" src="admin.js?v=29"></script>
 </body>
 </html>

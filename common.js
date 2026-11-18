@@ -420,13 +420,15 @@ export function computeBalances(reqs, hireDate, today, emp = null) {
   const active = r => ACTIVE_STATUS.includes(r.status);
   const sum = arr => arr.reduce((a, r) => a + (r.hours || 0), 0);
   const annualTotal = !ent ? 0 : part ? (ent.start ? Number(emp.partAnnualHours) || 0 : 0) : ent.days * HOURS_PER_DAY;
-  const annualUsed = ent && ent.start
+  // 系統上線前（舊休假表）已休的特休：只算在填寫時的那個特休年度
+  const annualPre = ent && ent.start && emp && emp.preAnnualFrom === ent.start ? Number(emp.preAnnualHours) || 0 : 0;
+  const annualUsed = (ent && ent.start
     ? sum(reqs.filter(r => r.kind === "leave" && r.leaveType === "annual" && active(r) && r.startDate >= ent.start && r.startDate < ent.end))
-    : 0;
+    : 0) + annualPre;
   const compEarned = sum(reqs.filter(r => r.kind === "overtime" && r.comp === "comp" && r.status === "approved"));
   const compUsed = sum(reqs.filter(r => r.kind === "leave" && r.leaveType === "comp" && active(r)));
   return {
-    ent, part, annualTotal, annualUsed, annualLeft: annualTotal - annualUsed,
+    ent, part, annualTotal, annualUsed, annualPre, annualLeft: annualTotal - annualUsed,
     compEarned, compUsed, compLeft: compEarned - compUsed
   };
 }

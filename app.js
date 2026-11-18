@@ -13,7 +13,7 @@ import {
 } from "./common.js?v=20";
 import { onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { startBoard } from "./board.js?v=22";
-import { startCalendar } from "./calendar.js?v=4";
+import { startCalendar } from "./calendar.js?v=5";
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot,
   writeBatch, Timestamp
@@ -714,7 +714,7 @@ function renderBalances() {
     annual = `<div><div class="sub">特休</div><div class="num">0</div><div class="sub">${esc(b.ent.end)} 起可休${b.part ? "（兼職按工時比例）" : " 3 天"}</div></div>`;
   } else {
     annual = `<div><div class="sub">特休剩餘</div><div class="num">${fmtHours(b.annualLeft)}</div>
-      <div class="sub">本年度 ${b.part ? `${b.annualTotal} 小時（兼職按工時比例）` : `${b.ent.days} 天`}，已用 ${fmtHours(b.annualUsed)}（含審核中）<br>年度期間 ${esc(b.ent.start)} ～ ${esc(b.ent.end)}</div></div>`;
+      <div class="sub">本年度 ${b.part ? `${b.annualTotal} 小時（兼職按工時比例）` : `${b.ent.days} 天`}，已用 ${fmtHours(b.annualUsed)}（含審核中${b.annualPre ? `、系統上線前 ${fmtHours(b.annualPre)}` : ""}）<br>年度期間 ${esc(b.ent.start)} ～ ${esc(b.ent.end)}</div></div>`;
   }
   const comp = `<div><div class="sub">補休剩餘</div><div class="num">${fmtHours(b.compLeft)}</div>
     <div class="sub">加班換得 ${b.compEarned} 小時，已用 ${b.compUsed} 小時</div></div>`;
