@@ -224,21 +224,56 @@ export function offDayLabel(s, holidays) {
 }
 
 // ===== 請假／加班 =====
+// 依勞動基準法、勞工請假規則、性別平等工作法（含 2026-01-01 起新制）
+//   cap：法定上限（小時）；per：year＝同一曆年、month＝同一月份
+//   超過上限時系統會提醒、要求再按一次確認（雇主可以給得比法律多，所以不完全擋）
 export const LEAVE_TYPES = [
-  { key: "annual", label: "特休" },
-  { key: "comp", label: "補休", note: "使用加班換得的補休時數" },
-  { key: "personal", label: "事假", note: "全年 14 日內，不給工資" },
-  { key: "family", label: "家庭照顧假", note: "全年 7 日，併入事假計算" },
-  { key: "sick", label: "病假", note: "未住院全年 30 日內，工資折半" },
-  { key: "menstrual", label: "生理假", note: "每月 1 日" },
-  { key: "marriage", label: "婚假", note: "8 日" },
-  { key: "funeral", label: "喪假", note: "依親等 3～8 日" },
-  { key: "official", label: "公假" },
-  { key: "injury", label: "公傷病假" },
-  { key: "maternity", label: "產假" },
-  { key: "paternity", label: "陪產檢及陪產假", note: "7 日" }
+  { key: "annual", label: "特休", note: "依年資計算（勞基法第 38 條），工資照給；年度終了未休完應發給工資或經雙方同意遞延一年" },
+  { key: "comp", label: "補休", note: "使用加班換得的補休時數；1 年內要休完，先到期的先用，到期未休完改發加班費" },
+  { key: "personal", label: "事假", note: "全年 14 日（含家庭照顧假），不給工資", cap: 112, per: "year" },
+  { key: "family", label: "家庭照顧假", note: "全年 56 小時（7 日），可以按小時請，併入事假計算；不給工資，但不得因此扣全勤獎金", cap: 56, per: "year" },
+  { key: "sick", label: "病假", note: "未住院全年 30 日內工資折半；一年內未超過 10 日，公司不得因此給予不利處分", cap: 240, per: "year" },
+  { key: "hospital", label: "病假（住院）", note: "住院者 2 年內合計不超過 1 年（含未住院病假）；全年 30 日內工資折半" },
+  { key: "menstrual", label: "生理假", note: "每月 1 日，工資折半；全年前 3 日不併入病假，超過的併入病假計算", cap: 8, per: "month" },
+  { key: "marriage", label: "婚假", note: "8 日，工資照給（原則上於結婚前 10 日至結婚後 3 個月內請畢）" },
+  { key: "funeral", label: "喪假", note: "依親等 3～8 日，工資照給：父母、養父母、繼父母、配偶 8 日；祖父母、子女、配偶之父母 6 日；曾祖父母、兄弟姊妹、配偶之祖父母 3 日" },
+  { key: "official", label: "公假", note: "依實際需要，工資照給" },
+  { key: "injury", label: "公傷病假", note: "職業災害，依實際需要；公司按原領工資補償" },
+  { key: "maternity", label: "產假", note: "分娩前後 8 週；懷孕 3 個月以上流產 4 週、2～3 個月流產 1 週、未滿 2 個月流產 5 日。以日曆天連續計算（含假日）；到職滿 6 個月工資照給，未滿減半" },
+  { key: "prenatal", label: "產檢假", note: "懷孕期間共 7 日，可以按小時請，工資照給" },
+  { key: "tocolysis", label: "安胎休養", note: "依醫師診斷，併入住院病假計算；不得因此扣全勤獎金" },
+  { key: "paternity", label: "陪產檢及陪產假", note: "配偶懷孕期間至分娩後 15 日內，共 7 日，可以按小時請，工資照給" },
+  { key: "childcare", label: "育嬰留停（按日）", note: "2026 年起可以「日」為單位申請，每次請整天；留職停薪不給工資（可向勞保局申請育嬰津貼）；原則上 5 日前提出", fullDay: true }
 ];
 export const LEAVE_LABEL = Object.fromEntries(LEAVE_TYPES.map(t => [t.key, t.label]));
+
+// 法定上限檢查：draft＝這張假單（含 hours），reqs＝這個人所有申請。回傳提醒文字（空字串＝沒問題）
+export function leaveLegalWarn(draft, reqs) {
+  const t = LEAVE_TYPES.find(x => x.key === draft.leaveType);
+  if (!t) return "";
+  const year = (draft.startDate || "").slice(0, 4), month = (draft.startDate || "").slice(0, 7);
+  const act = reqs.filter(r => r.kind === "leave" && ACTIVE_STATUS.includes(r.status) && r.id !== draft.id);
+  const used = (keys, prefix) => act.filter(r => keys.includes(r.leaveType) && (r.startDate || "").startsWith(prefix))
+    .reduce((a, r) => a + (r.hours || 0), 0);
+  const d = n => fmtHours(n);
+  const out = [];
+  if (t.cap) {
+    const prefix = t.per === "month" ? month : year;
+    const u = used([t.key], prefix) + draft.hours;
+    if (u > t.cap) out.push(`${t.label}${t.per === "month" ? "本月" : "今年"}累計將達 ${d(u)}，超過法定的 ${d(t.cap)}`);
+  }
+  if (draft.leaveType === "family") {   // 家庭照顧假併入事假
+    const u = used(["personal", "family"], year) + draft.hours;
+    if (u > 112) out.push(`事假＋家庭照顧假今年累計將達 ${d(u)}，超過法定的 14 天`);
+  }
+  if (draft.leaveType === "sick" || draft.leaveType === "menstrual") {   // 生理假超過 3 日的部分併入病假
+    const sick = used(["sick"], year) + (draft.leaveType === "sick" ? draft.hours : 0);
+    const men = used(["menstrual"], year) + (draft.leaveType === "menstrual" ? draft.hours : 0);
+    const u = sick + Math.max(0, men - 24);
+    if (u > 240 && !(draft.leaveType === "sick" && sick > 240)) out.push(`病假（含超過 3 日的生理假）今年累計將達 ${d(u)}，超過未住院 30 天`);
+  }
+  return out.join("；");
+}
 export const STATUS_INFO = {
   pending_supervisor: ["warn", "待主管審核"],
   pending_admin: ["warn", "待核定"],          // 內部名稱沿用 pending_admin，代表「等副主官／主官最終核定」
@@ -412,6 +447,54 @@ export function annualEntitlement(hireDate, onDate) {
   return { start: addMonths(hireDate, 12 * y), end: addMonths(hireDate, 12 * (y + 1)), days };
 }
 
+// 補休：加班換得的時數 1 年內要休完（勞基法第 32-1 條，期限由勞資約定），先到期的先用
+export const COMP_MONTHS = 12;
+export function compLots(reqs, today) {
+  const active = r => ACTIVE_STATUS.includes(r.status);
+  const lots = reqs.filter(r => r.kind === "overtime" && r.comp === "comp" && r.status === "approved")
+    .map(r => ({ id: r.id, date: r.date, exp: addMonths(r.date, COMP_MONTHS), hours: r.hours || 0, left: r.hours || 0 }))
+    .sort((x, y) => x.exp.localeCompare(y.exp));
+  const uses = reqs.filter(r => r.kind === "leave" && r.leaveType === "comp" && active(r))
+    .sort((x, y) => x.startDate.localeCompare(y.startDate));
+  const short = {};
+  for (const u of uses) {
+    let need = u.hours || 0;
+    for (const l of lots) {
+      if (need <= 0) break;
+      if (l.left <= 0 || l.exp <= u.startDate) continue;   // 請假那天已經到期的不能用
+      const t = Math.min(need, l.left); l.left -= t; need -= t;
+    }
+    if (need > 0) short[u.id] = need;
+  }
+  const expiredLots = lots.filter(l => l.left > 0 && l.exp <= today);
+  const live = lots.filter(l => l.left > 0 && l.exp > today);
+  return {
+    lots, short,
+    expired: expiredLots.reduce((a, l) => a + l.left, 0), expiredLots,
+    left: live.reduce((a, l) => a + l.left, 0),
+    next: live[0] ? { exp: live[0].exp, hours: live.filter(l => l.exp === live[0].exp).reduce((a, l) => a + l.left, 0) } : null
+  };
+}
+
+// 特休年度結算：users.annualSettle = { 年度起算日: { pay: 發給工資的時數, defer: 遞延到下一年度的時數, at, by } }
+// 某年度的特休總額（含上一年度遞延過來的）、已休、未休
+export function annualPeriodInfo(emp, reqs, start) {
+  if (!emp || !emp.hireDate || !start) return null;
+  const ent = annualEntitlement(emp.hireDate, start);
+  if (!ent || ent.start !== start) return null;
+  const part = isPart(emp);
+  const base = part ? Number(emp.partAnnualHours) || 0 : ent.days * HOURS_PER_DAY;
+  const prev = annualEntitlement(emp.hireDate, addDays(start, -1));
+  const carry = prev && prev.start ? Number(((emp.annualSettle || {})[prev.start] || {}).defer) || 0 : 0;
+  const pre = emp.preAnnualFrom === start ? Number(emp.preAnnualHours) || 0 : 0;
+  const used = reqs.filter(r => r.kind === "leave" && r.leaveType === "annual" && ACTIVE_STATUS.includes(r.status)
+    && r.startDate >= ent.start && r.startDate < ent.end).reduce((a, r) => a + (r.hours || 0), 0) + pre;
+  const total = base + carry, unused = Math.max(0, total - used);
+  const payOnly = Math.min(unused, Math.max(0, carry - used));   // 遞延過來沒休完的，不能再遞延，一定要發工資
+  return { start: ent.start, end: ent.end, days: ent.days, base, carry, pre, used, total, unused, payOnly,
+    deferrable: unused - payOnly, settle: (emp.annualSettle || {})[ent.start] || null, prevStart: prev ? prev.start : null };
+}
+
 // 計算特休、補休餘額。reqs：該員工所有申請
 // 兼職：特休時數由管理員依比例設定（partAnnualHours），不套用正職天數
 export function computeBalances(reqs, hireDate, today, emp = null) {
@@ -419,17 +502,19 @@ export function computeBalances(reqs, hireDate, today, emp = null) {
   const part = isPart(emp);
   const active = r => ACTIVE_STATUS.includes(r.status);
   const sum = arr => arr.reduce((a, r) => a + (r.hours || 0), 0);
-  const annualTotal = !ent ? 0 : part ? (ent.start ? Number(emp.partAnnualHours) || 0 : 0) : ent.days * HOURS_PER_DAY;
+  const empH = { ...(emp || {}), hireDate };
+  const info = ent && ent.start ? annualPeriodInfo(empH, reqs, ent.start) : null;
+  const annualTotal = !ent ? 0 : info ? info.total : 0;
   // 系統上線前（舊休假表）已休的特休：只算在填寫時的那個特休年度
-  const annualPre = ent && ent.start && emp && emp.preAnnualFrom === ent.start ? Number(emp.preAnnualHours) || 0 : 0;
-  const annualUsed = (ent && ent.start
-    ? sum(reqs.filter(r => r.kind === "leave" && r.leaveType === "annual" && active(r) && r.startDate >= ent.start && r.startDate < ent.end))
-    : 0) + annualPre;
+  const annualPre = info ? info.pre : 0;
+  const annualUsed = info ? info.used : 0;
+  const annualCarry = info ? info.carry : 0;
   const compEarned = sum(reqs.filter(r => r.kind === "overtime" && r.comp === "comp" && r.status === "approved"));
   const compUsed = sum(reqs.filter(r => r.kind === "leave" && r.leaveType === "comp" && active(r)));
+  const cl = compLots(reqs, today);
   return {
-    ent, part, annualTotal, annualUsed, annualPre, annualLeft: annualTotal - annualUsed,
-    compEarned, compUsed, compLeft: compEarned - compUsed
+    ent, part, annualTotal, annualUsed, annualPre, annualCarry, annualLeft: annualTotal - annualUsed,
+    compEarned, compUsed, compLeft: cl.left, compExpired: cl.expired, compNext: cl.next
   };
 }
 export function fmtHours(h) {

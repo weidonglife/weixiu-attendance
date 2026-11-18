@@ -5,15 +5,15 @@ import {
   summarizeDay, tagsHtml, MODE_LABEL, TYPE_LABEL, esc, errMsg, showMsg, hideMsg,
   checkNewPassword, WORK,
   todayStr, ymOfStr, toHolidayMap, isOffDay, offDayLabel, buildLeaveMap, calcLeaveHours, calcOtHours,
-  computeBalances, fmtHours, LEAVE_TYPES, STATUS_INFO, ACTIVE_STATUS, OT_MONTH_LIMIT,
+  computeBalances, compLots, fmtHours, LEAVE_TYPES, leaveLegalWarn, STATUS_INFO, ACTIVE_STATUS, OT_MONTH_LIMIT,
   reqTitle, reqWhen, reqSortKey, leaveOverlaps, fmtDateStr
   , isPart, notify, callNotify, NOTIFY_URL, LINE_OA_ID, addDays, closureWins
   , normApproval, topRole, routeOf, afterSupervisor, canFinal, finalApprover, routeMsg, stageText, reviewNotes,
   approvedByText, TOP_LABEL, PENDING, leaveListOf, LL_DAYS, LEAVE_LABEL, timelineHtml
-} from "./common.js?v=20";
+} from "./common.js?v=22";
 import { onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { startBoard } from "./board.js?v=22";
-import { startCalendar } from "./calendar.js?v=5";
+import { startBoard } from "./board.js?v=24";
+import { startCalendar } from "./calendar.js?v=7";
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot,
   writeBatch, Timestamp
@@ -574,13 +574,16 @@ function checkLeave(r) {
   if (r.startDate === r.endDate && r.endHour <= r.startHour) return { hours: 0, error: "結束時間要晚於開始時間" };
   const hours = calcLeaveHours(r, holidays);
   if (hours <= 0) return { hours, error: "這段時間都不是上班時間（週末、國定假日或午休），不需要請假" };
+  const lt = LEAVE_TYPES.find(x => x.key === r.leaveType);
+  if (lt && lt.fullDay && (r.startHour > 8 || r.endHour < 17)) return { hours, error: `${lt.label}要以整天為單位（08:00 到 17:00）` };
   const b = balances();
   if (r.leaveType === "annual") {
     if (!me.hireDate) return { hours, error: "管理員尚未設定你的到職日，暫時無法計算特休，請先聯絡管理員" };
     if (hours > b.annualLeft) return { hours, error: `特休不足：剩餘 ${fmtHours(b.annualLeft)}，這次需要 ${fmtHours(hours)}` };
   }
-  if (r.leaveType === "comp" && hours > b.compLeft) {
-    return { hours, error: `補休不足：剩餘 ${fmtHours(b.compLeft)}，這次需要 ${fmtHours(hours)}` };
+  if (r.leaveType === "comp") {
+    const sim = compLots([...myReqs, { ...r, id: "__draft", kind: "leave", hours, status: "pending_supervisor" }], todayStr());
+    if (sim.short.__draft) return { hours, error: `補休不足：到 ${r.startDate} 還能用的補休不夠（補休 1 年內要休完，到期就不能用），這次需要 ${fmtHours(hours)}` };
   }
   const clash = myReqs.find(x => x.kind === "leave" && ACTIVE_STATUS.includes(x.status) && leaveOverlaps(r, x, holidays));
   if (clash) return { hours, error: `和已申請的假單時間重疊（${reqTitle(clash)}：${reqWhen(clash)}）` };
@@ -594,8 +597,12 @@ function updateLeaveCalc() {
   const { hours, error } = checkLeave(leaveDraft());
   const el = $("lvCalc");
   el.classList.toggle("err", !!error);
-  el.textContent = error || `共請假 ${fmtHours(hours)}（${hours} 小時，已扣除午休與假日）`;
+  const warn = error ? "" : leaveLegalWarn({ ...leaveDraft(), hours }, myReqs);
+  el.classList.toggle("err", !!(error || warn));
+  el.textContent = error || `共請假 ${fmtHours(hours)}（${hours} 小時，已扣除午休與假日）${warn ? `。注意：${warn}` : ""}`;
+  lvConfirm = false; $("btnLeave").textContent = "送出請假申請";
 }
+let lvConfirm = false;
 
 function otDraft() {
   return { date: $("otDate").value, startTime: $("otStart").value, endTime: $("otEnd").value, comp: $("otComp").value };
@@ -626,7 +633,20 @@ function updateOtCalc() {
   el.classList.toggle("err", !!error);
   if (error) { el.textContent = error; return; }
   const month = otMonthTotal(r.date) + hours;
-  el.textContent = `共加班 ${hours} 小時（本月累計 ${month} 小時）`;
+  const warn = otLegalWarn(r, hours);
+  el.classList.toggle("err", !!warn);
+  el.textContent = `共加班 ${hours} 小時（本月累計 ${month} 小時）${warn ? `。注意：${warn}` : ""}`;
+}
+// 勞基法第 32、36 條：一天正常工時＋加班不得超過 12 小時；休息日最多 12 小時；例假日（週日）除天災等不得出勤
+function otLegalWarn(r, hours) {
+  const day = myReqs.filter(x => x.kind === "overtime" && ACTIVE_STATUS.includes(x.status) && x.date === r.date)
+    .reduce((a, x) => a + x.hours, 0) + hours;
+  const p = r.date.split("-"), wd = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])).getUTCDay();
+  const workday = calcLeaveHours({ startDate: r.date, endDate: r.date, startHour: 8, endHour: 17 }, holidays) > 0;
+  if (!workday && wd === 0) return "週日是例假日，除天災、事變或突發事件外不得出勤";
+  if (workday && day > 4) return `當天加班將達 ${day} 小時，上班日正常工時加上加班不得超過 12 小時（加班最多 4 小時）`;
+  if (!workday && day > 12) return `當天加班將達 ${day} 小時，休息日或假日出勤一天最多 12 小時`;
+  return "";
 }
 
 $("btnLeave").onclick = async () => {
@@ -636,6 +656,14 @@ $("btnLeave").onclick = async () => {
   const { hours, error } = checkLeave(r);
   if (error) { showMsg(msg, error, "err"); return; }
   if (!reason) { showMsg(msg, "請填寫事由", "err"); return; }
+  const warn = leaveLegalWarn({ ...r, hours }, myReqs);
+  if (warn && !lvConfirm) {
+    lvConfirm = true;
+    $("btnLeave").textContent = "確定仍要送出";
+    showMsg(msg, `注意：${warn}。超過法定天數的部分需要公司同意，確定要送出請再按一次。`, "err");
+    return;
+  }
+  lvConfirm = false; $("btnLeave").textContent = "送出請假申請";
   $("btnLeave").disabled = true;
   try {
     const route = routeOf(approval, me);
@@ -669,10 +697,14 @@ $("btnOT").onclick = async () => {
   if (error) { showMsg(msg, error, "err"); return; }
   if (!reason) { showMsg(msg, "請填寫加班事由", "err"); return; }
   const month = otMonthTotal(r.date) + hours;
-  if (month > OT_MONTH_LIMIT && !otConfirm) {
+  const warns = [];
+  if (month > OT_MONTH_LIMIT) warns.push(`送出後本月加班將達 ${month} 小時，超過勞基法每月 ${OT_MONTH_LIMIT} 小時的上限（經勞資會議同意者最多 54 小時、每 3 個月 138 小時）`);
+  const dw = otLegalWarn(r, hours);
+  if (dw) warns.push(dw);
+  if (warns.length && !otConfirm) {
     otConfirm = true;
     $("btnOT").textContent = "確定仍要送出";
-    showMsg(msg, `注意：送出後本月加班將達 ${month} 小時，超過勞基法每月 ${OT_MONTH_LIMIT} 小時的上限（經勞資會議同意者最多 54 小時）。確定要送出請再按一次。`, "err");
+    showMsg(msg, `注意：${warns.join("；")}。確定要送出請再按一次。`, "err");
     return;
   }
   $("btnOT").disabled = true;
@@ -714,10 +746,10 @@ function renderBalances() {
     annual = `<div><div class="sub">特休</div><div class="num">0</div><div class="sub">${esc(b.ent.end)} 起可休${b.part ? "（兼職按工時比例）" : " 3 天"}</div></div>`;
   } else {
     annual = `<div><div class="sub">特休剩餘</div><div class="num">${fmtHours(b.annualLeft)}</div>
-      <div class="sub">本年度 ${b.part ? `${b.annualTotal} 小時（兼職按工時比例）` : `${b.ent.days} 天`}，已用 ${fmtHours(b.annualUsed)}（含審核中${b.annualPre ? `、系統上線前 ${fmtHours(b.annualPre)}` : ""}）<br>年度期間 ${esc(b.ent.start)} ～ ${esc(b.ent.end)}</div></div>`;
+      <div class="sub">本年度 ${b.part ? `${b.annualTotal} 小時（兼職按工時比例）` : `${b.ent.days} 天`}，${b.annualCarry ? `＋上年度遞延 ${fmtHours(b.annualCarry)}，` : ""}已用 ${fmtHours(b.annualUsed)}（含審核中${b.annualPre ? `、系統上線前 ${fmtHours(b.annualPre)}` : ""}）<br>年度期間 ${esc(b.ent.start)} ～ ${esc(b.ent.end)}</div></div>`;
   }
   const comp = `<div><div class="sub">補休剩餘</div><div class="num">${fmtHours(b.compLeft)}</div>
-    <div class="sub">加班換得 ${b.compEarned} 小時，已用 ${b.compUsed} 小時</div></div>`;
+    <div class="sub">加班換得 ${b.compEarned} 小時，已用 ${b.compUsed} 小時${b.compNext ? `<br>${esc(b.compNext.exp)} 前要休完 ${fmtHours(b.compNext.hours)}` : ""}${b.compExpired ? `<br>已到期 ${fmtHours(b.compExpired)}（改發加班費）` : ""}<br>補休 1 年內要休完，先到期的先用</div></div>`;
   // 今年各假別使用（已核准）
   const year = todayStr().slice(0, 4);
   const used = {};

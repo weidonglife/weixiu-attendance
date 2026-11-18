@@ -48,6 +48,7 @@
       <button data-tab="tCor">補打卡審核 <span id="corCount"></span></button>
       <button data-tab="tReq">請假／加班審核 <span id="reqCount"></span></button>
       <button data-tab="tRec">請假／加班紀錄</button>
+      <button data-tab="tSettle">特休／補休結算</button>
       <button data-tab="tOffice">公司位置</button>
       <button data-tab="tHol">國定假日／公司休假</button>
       <a class="tablink" href="board.html" target="_blank" rel="noopener">開啟今日出勤看板（新視窗）</a>
@@ -309,6 +310,34 @@
     </section>
 
     <!-- 公司位置 -->
+    <section id="tSettle" class="hidden">
+      <div class="card">
+        <div class="row" style="align-items:center">
+          <h2 style="margin:0">特休年度結算</h2>
+          <button id="stXlsx" class="secondary" style="flex:0 0 auto">下載 Excel</button>
+        </div>
+        <p class="muted">依勞基法第 38 條：特休年度結束還沒休完的，要折算工資發給員工；或雙方同意後遞延到下一年度（遞延過去仍沒休完的，下一年度結束時一定要發工資，不能再遞延）。<br>
+          只列出系統上線後才結束的年度；上線前的年度請照舊方式處理。未休時數以「每小時工資」折算，金額請由薪資計算。</p>
+        <p id="stMsg" class="msg hidden"></p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>員工</th><th>已結束年度</th><th>應休</th><th>已休</th><th>未休</th><th>處理</th><th>本年度</th><th>剩餘</th></tr></thead>
+            <tbody id="stBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>補休到期</h2>
+        <p class="muted">補休 1 年內要休完，先到期的先用；到期沒休完的時數要改發加班費（勞基法第 32-1 條）。</p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>員工</th><th>加班日期</th><th>到期日</th><th>未休時數</th><th>狀態</th></tr></thead>
+            <tbody id="ctBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <section id="tOffice" class="card hidden">
       <h2>公司打卡位置</h2>
       <p class="muted">建議拿手機站在公司裡，按「使用目前位置」，系統會以這個點為中心，在設定的半徑內才能內勤打卡。</p>
@@ -329,6 +358,6 @@
   </div>
 </div>
 
-<script type="module" src="admin.js?v=29"></script>
+<script type="module" src="admin.js?v=31"></script>
 </body>
 </html>

@@ -7,9 +7,9 @@ import {
   LEAVE_LABEL, STATUS_INFO, reqTitle, reqWhen, reqSortKey,
   computeMonthReport, leaveBalanceOverview, fmtTimeSec, OT_COMP_LABEL,
   isPart, EMP_TYPE_LABEL, closureWins, closureOf, closureText, notify, callNotify, NOTIFY_URL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY,
-  normApproval, topRole, TOP_LABEL, PENDING, stageText, reviewNotes, approvedByText, leaveListOf, LL_KEYS, LL_DAYS, addDays, timelineHtml
-} from "./common.js?v=20";
-import { startCalendar } from "./calendar.js?v=5";
+  normApproval, topRole, TOP_LABEL, PENDING, stageText, reviewNotes, approvedByText, leaveListOf, LL_KEYS, LL_DAYS, addDays, timelineHtml, annualPeriodInfo, compLots
+} from "./common.js?v=22";
+import { startCalendar } from "./calendar.js?v=7";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut
@@ -65,12 +65,13 @@ $("loginPw").addEventListener("keydown", e => { if (e.key === "Enter") $("btnLog
 document.querySelectorAll(".btnLogout").forEach(b => b.onclick = () => logout());
 
 // ===== 分頁 =====
-const TABS = ["tToday", "tCal", "tReport", "tStaff", "tCor", "tReq", "tRec", "tOffice", "tHol"];
+const TABS = ["tToday", "tCal", "tReport", "tStaff", "tCor", "tReq", "tRec", "tSettle", "tOffice", "tHol"];
 let calStop = null;
 document.querySelectorAll(".tabs button[data-tab]").forEach(btn => {
   btn.onclick = () => {
     document.querySelectorAll(".tabs button[data-tab]").forEach(b => b.classList.toggle("on", b === btn));
     TABS.forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.tab));
+    if (btn.dataset.tab === "tSettle") loadSettle();
     if (btn.dataset.tab === "tCal" && !calStop) { calStop = startCalendar($("calRoot"), { me, full: true, admin: true }); loadCalLinksAdmin(); }
   };
 });
@@ -786,6 +787,102 @@ $("corBody").onclick = async e => {
 };
 
 // ===== 請假／加班審核 =====
+// ===== 特休／補休結算 =====
+let settleRows = [];
+async function loadSettle() {
+  const body = $("stBody"), cbody = $("ctBody");
+  body.innerHTML = `<tr><td colspan="8" class="muted">計算中…</td></tr>`;
+  cbody.innerHTML = `<tr><td colspan="5" class="muted">計算中…</td></tr>`;
+  hideMsg($("stMsg"));
+  try {
+    const today = todayStr(), goLive = officeCfg.goLive || "0000-00-00";
+    const all = (await getDocs(collection(db, "requests"))).docs.map(d => ({ id: d.id, ...d.data() }));
+    settleRows = staff.map(s => {
+      const reqs = all.filter(r => r.empId === s.empId);
+      const ent = s.hireDate ? annualEntitlement(s.hireDate, today) : null;
+      const cur = ent && ent.start ? annualPeriodInfo(s, reqs, ent.start) : null;
+      const prev = cur && cur.prevStart ? annualPeriodInfo(s, reqs, cur.prevStart) : null;
+      return { s, ent, cur, prev: prev && prev.end > goLive ? prev : null, comp: compLots(reqs, today), today };
+    });
+    body.innerHTML = settleRows.map(({ s, ent, cur, prev }) => {
+      const who = `<td><span class="empno">${esc(s.empId)}</span>${esc(s.name)}</td>`;
+      if (!s.hireDate) return `<tr>${who}<td colspan="7"><span class="tag warn">未設定到職日</span></td></tr>`;
+      let p = `<td colspan="5" class="muted">—</td>`;
+      if (prev) {
+        const st = prev.settle;
+        const act = st
+          ? `${st.pay ? `<span class="tag ok">發給工資 ${fmtHours(st.pay)}</span> ` : ""}${st.defer ? `<span class="tag field">遞延 ${fmtHours(st.defer)}</span> ` : ""}${!st.pay && !st.defer ? '<span class="tag gray">已休完</span> ' : ""}
+             <button class="small secondary" data-st="undo" data-uid="${s.uid}" data-start="${prev.start}">撤銷</button>`
+          : prev.unused <= 0 ? `<button class="small secondary" data-st="done" data-uid="${s.uid}" data-start="${prev.start}">確認已休完</button>`
+          : `<button class="small" data-st="pay" data-uid="${s.uid}" data-start="${prev.start}">全部發給工資</button>
+             ${prev.deferrable > 0 ? `<button class="small secondary" data-st="defer" data-uid="${s.uid}" data-start="${prev.start}">遞延一年${prev.payOnly ? `（另發 ${fmtHours(prev.payOnly)}）` : ""}</button>` : ""}`;
+        p = `<td>${esc(prev.start)} ～ ${esc(addDays(prev.end, -1))}</td><td>${fmtHours(prev.total)}${prev.carry ? `<br><span class="muted">含遞延 ${fmtHours(prev.carry)}</span>` : ""}</td>
+          <td>${fmtHours(prev.used)}</td><td><b>${fmtHours(prev.unused)}</b></td><td>${act}</td>`;
+      }
+      const left = cur ? cur.total - cur.used : 0;
+      const daysLeft = cur ? Math.round((Date.parse(cur.end) - Date.parse(todayStr())) / 86400000) : null;
+      const c = cur
+        ? `<td>${esc(cur.start)} ～ ${esc(addDays(cur.end, -1))}<br><span class="muted">剩 ${daysLeft} 天結束</span></td>
+           <td><b>${fmtHours(left)}</b>${cur.carry ? `<br><span class="muted">含遞延 ${fmtHours(cur.carry)}</span>` : ""}${daysLeft <= 60 && left > 0 ? '<br><span class="tag warn">請提醒排休</span>' : ""}</td>`
+        : `<td colspan="2" class="muted">${ent ? esc(ent.end) + " 起可休" : "—"}</td>`;
+      return `<tr class="${prev && !prev.settle && prev.unused > 0 ? "hl" : ""}">${who}${p}${c}</tr>`;
+    }).join("") || `<tr><td colspan="8" class="muted">沒有員工</td></tr>`;
+
+    const crow = [];
+    settleRows.forEach(({ s, comp, today }) => {
+      comp.lots.filter(l => l.left > 0 && (l.exp <= today || Date.parse(l.exp) - Date.parse(today) <= 30 * 86400000)).forEach(l => {
+        const expired = l.exp <= today;
+        crow.push({ s, l, expired });
+      });
+    });
+    crow.sort((a, b) => a.l.exp.localeCompare(b.l.exp));
+    cbody.innerHTML = crow.map(({ s, l, expired }) => `<tr class="${expired ? "hl" : ""}"><td><span class="empno">${esc(s.empId)}</span>${esc(s.name)}</td>
+      <td>${esc(l.date)}</td><td>${esc(l.exp)}</td><td>${fmtHours(l.left)}</td>
+      <td>${expired ? '<span class="tag late">已到期，改發加班費</span>' : '<span class="tag warn">30 天內到期</span>'}</td></tr>`).join("")
+      || `<tr><td colspan="5" class="muted">目前沒有到期或 30 天內到期的補休 👍</td></tr>`;
+  } catch (e) {
+    body.innerHTML = `<tr><td colspan="8">${esc(errMsg(e))}</td></tr>`;
+  }
+}
+$("stBody").addEventListener("click", async e => {
+  const btn = e.target.closest("button[data-st]");
+  if (!btn) return;
+  const row = settleRows.find(x => x.s.uid === btn.dataset.uid);
+  if (!row || !row.prev || row.prev.start !== btn.dataset.start) return;
+  const P = row.prev, act = btn.dataset.st;
+  const map = { ...(row.s.annualSettle || {}) };
+  if (act === "undo") {
+    if (btn.dataset.sure !== "1") { btn.dataset.sure = "1"; btn.textContent = "確定撤銷？"; return; }
+    delete map[P.start];
+  } else {
+    const rec = act === "defer" ? { pay: P.payOnly, defer: P.deferrable } : act === "pay" ? { pay: P.unused, defer: 0 } : { pay: 0, defer: 0 };
+    map[P.start] = { ...rec, unused: P.unused, end: P.end, by: me.empId, byName: me.name, at: new Date().toISOString() };
+  }
+  btn.disabled = true;
+  try {
+    await updateDoc(doc(db, "users", row.s.uid), { annualSettle: map });
+    row.s.annualSettle = map;
+    const st = staff.find(x => x.uid === row.s.uid); if (st) st.annualSettle = map;
+    showMsg($("stMsg"), `${row.s.name}：${act === "undo" ? "已撤銷" : "已記錄"}`, "ok");
+    loadSettle();
+  } catch (err) { showMsg($("stMsg"), errMsg(err), "err"); btn.disabled = false; }
+});
+$("stXlsx").onclick = async () => {
+  try {
+    await loadXlsx();
+    const wb = XLSX.utils.book_new();
+    addSheet(wb, "特休結算", ["員工編號 Emp ID", "姓名 Name", "已結束年度 Period", "應休(小時)", "已休(小時)", "未休(小時)", "發給工資(小時)", "遞延(小時)", "處理人", "本年度 Current", "本年度剩餘(小時)"],
+      settleRows.map(({ s, cur, prev }) => [s.empId, s.name,
+        prev ? `${prev.start} ~ ${addDays(prev.end, -1)}` : "", prev ? prev.total : "", prev ? prev.used : "", prev ? prev.unused : "",
+        prev && prev.settle ? prev.settle.pay : "", prev && prev.settle ? prev.settle.defer : "", prev && prev.settle ? prev.settle.byName || "" : "",
+        cur ? `${cur.start} ~ ${addDays(cur.end, -1)}` : "", cur ? cur.total - cur.used : ""]));
+    const crows = [];
+    settleRows.forEach(({ s, comp }) => comp.expiredLots.forEach(l => crows.push([s.empId, s.name, l.date, l.exp, l.left])));
+    addSheet(wb, "補休到期", ["員工編號 Emp ID", "姓名 Name", "加班日期 OT Date", "到期日 Expiry", "未休時數 Hours"], crows);
+    XLSX.writeFile(wb, `特休補休結算_${todayStr()}.xlsx`);
+  } catch (err) { showMsg($("stMsg"), errMsg(err), "err"); }
+};
+
 let pendingReqs = [];
 const reqCache = {}; // empId → 該員工所有申請（算餘額用）
 async function reqsOf(empId) {
