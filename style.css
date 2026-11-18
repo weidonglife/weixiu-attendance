@@ -223,3 +223,5 @@ input[type="date"], input[type="time"] {
   min-height: 44px; text-align: left;
 }
 input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
+.cal .dot.pd { background: var(--orange); }
+.cal .cnt span { white-space: nowrap; }

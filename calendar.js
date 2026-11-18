@@ -109,6 +109,13 @@ export function startCalendar(root, opts = {}) {
     return m;
   }
 
+  // 手機版格子裡的小圓點：紫＝活動、綠＝已核准請假、橘＝審核中、藍＝兼職
+  function cnt(day) {
+    const ok = day.lv.filter(x => x.r.status === "approved").length, pd = day.lv.length - ok;
+    return [[day.ev.length, "ev"], [ok, "lv"], [pd, "pd"], [day.sh.length, "sh"]]
+      .filter(([n]) => n).map(([n, c]) => `<span><i class="dot ${c}"></i>${n}</span>`).join(" ");
+  }
+
   function render() {
     const { start, end } = monthRange();
     $c("title").textContent = `${ym.slice(0, 4)} 年 ${Number(ym.slice(5, 7))} 月`;
@@ -127,7 +134,7 @@ export function startCalendar(root, opts = {}) {
         <span class="n">${Number(d.slice(8, 10))}</span>
         ${hol ? `<span class="hn">${esc(hol)}</span>` : cl ? `<span class="hn cl">⛈ ${esc(cl.name)}</span>` : ""}
         <span class="chips">${chips.slice(0, 3).join("")}${chips.length > 3 ? `<span class="more">+${chips.length - 3}</span>` : ""}</span>
-        <span class="cnt">${day.ev.length ? `<i class="dot ev"></i>${day.ev.length} ` : ""}${day.lv.length ? `<i class="dot lv"></i>${day.lv.length} ` : ""}${day.sh.length ? `<i class="dot sh"></i>${day.sh.length}` : ""}</span>
+        <span class="cnt">${cnt(day)}</span>
       </button>`;
     }
     $c("grid").innerHTML = cells;
