@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=24">
+<link rel="stylesheet" href="style.css?v=25">
 </head>
 <body>
 <header class="top">
@@ -42,7 +42,7 @@
     <div id="admBanner" class="banner hidden"></div>
     <div class="tabs">
       <button data-tab="tToday" class="on">每日出勤</button>
-      <button data-tab="tCal">出勤月曆</button>
+      <button data-tab="tCal">行事曆</button>
       <button data-tab="tReport">月報表</button>
       <button data-tab="tStaff">員工管理</button>
       <button data-tab="tCor">補打卡審核 <span id="corCount"></span></button>
@@ -55,7 +55,19 @@
     </div>
 
     <!-- 每日出勤 -->
-    <section id="tCal" class="card hidden"><div id="calRoot"></div></section>
+    <section id="tCal" class="hidden">
+      <div class="card"><div id="calRoot"></div></div>
+      <div class="card">
+        <h2>Google 日曆訂閱連結</h2>
+        <p class="muted">系統每 30 分鐘會把公司活動、放假和已核准的請假同步到兩個 Google 日曆。請到 Google 日曆的設定，把兩個日曆的「iCal 格式的私人網址」分別貼在下面，員工就能在「我的設定」一鍵加到手機。</p>
+        <label for="calLinkAll">員工版（唯修集團 行事曆）：請假只寫「請假」</label>
+        <input id="calLinkAll" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics">
+        <label for="calLinkSup">主管版（唯修集團 行事曆（主管版））：請假寫出假別，只有主管看得到</label>
+        <input id="calLinkSup" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics">
+        <button id="btnCalLinks" style="margin-top:12px">儲存訂閱連結</button>
+        <div id="calLinkMsg" class="msg hidden"></div>
+      </div>
+    </section>
 
     <section id="tToday" class="card">
       <div class="row" style="align-items:center">
@@ -313,6 +325,6 @@
   </div>
 </div>
 
-<script type="module" src="admin.js?v=25"></script>
+<script type="module" src="admin.js?v=26"></script>
 </body>
 </html>

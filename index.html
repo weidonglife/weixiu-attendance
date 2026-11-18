@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=24">
+<link rel="stylesheet" href="style.css?v=25">
 <link rel="stylesheet" href="board.css?v=20">
 </head>
 <body>
@@ -63,7 +63,7 @@
       <button data-tab="pLeave" type="button">請假／加班</button>
       <button data-tab="pBoard" type="button">今日出勤</button>
       <button data-tab="pReview" id="tabReview" class="hidden" type="button">待我審核 <span id="revCount"></span></button>
-      <button data-tab="pCal" id="tabCal" class="hidden" type="button">出勤月曆</button>
+      <button data-tab="pCal" id="tabCal" type="button">行事曆</button>
       <button data-tab="pMe" type="button">我的設定</button>
     </div>
 
@@ -232,6 +232,11 @@
     </div>
 
     <div class="card">
+      <h2>行事曆加到手機</h2>
+      <div id="calLinkBody" class="muted">載入中…</div>
+    </div>
+
+    <div class="card">
       <h2>修改密碼</h2>
       <p class="muted" style="margin-top:-6px">新密碼至少 8 個字元。忘記目前的密碼請找管理員重設。</p>
       <label for="myPwCur">目前的密碼</label>
@@ -251,6 +256,6 @@
   <footer class="note">唯修科技 · 傳創機電 · 唯校中心</footer>
 </div>
 
-<script type="module" src="app.js?v=25"></script>
+<script type="module" src="app.js?v=26"></script>
 </body>
 </html>

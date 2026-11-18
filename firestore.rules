@@ -319,7 +319,50 @@ service cloud.firestore {
       allow create, update: if isActive() && leaveListOk(id);
     }
 
+    // ===== 公司行事曆：所有人都看得到、都可以新增；只能修改／刪除自己建立的（管理員可以全部）=====
+    function eventOk(d) {
+      return d.keys().hasOnly(['title', 'startDate', 'endDate', 'allDay', 'startTime', 'endTime', 'location', 'note', 'company',
+                               'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
+        && d.title is string && d.title.size() > 0 && d.title.size() <= 60
+        && d.startDate is string && d.startDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && d.endDate is string && d.endDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && d.endDate >= d.startDate
+        && d.allDay is bool
+        && (d.allDay
+            ? (d.startTime == null && d.endTime == null)
+            : (d.startTime is string && d.startTime.matches('^[0-2][0-9]:[0-5][0-9]$')
+               && d.endTime is string && d.endTime.matches('^[0-2][0-9]:[0-5][0-9]$')
+               && (d.endDate > d.startDate || d.endTime > d.startTime)))
+        && d.location is string && d.location.size() <= 60
+        && d.note is string && d.note.size() <= 300
+        && d.company in ['', '唯修科技', '傳創機電', '唯校中心'];
+    }
+    match /events/{id} {
+      allow get, list: if isActive();
+      allow create: if isActive() && eventOk(request.resource.data)
+        && request.resource.data.createdBy == me().empId
+        && request.resource.data.createdByName == me().name
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isActive() && eventOk(request.resource.data)
+        && (resource.data.createdBy == me().empId || isAdmin())
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdByName == resource.data.createdByName
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isAdmin() || (isActive() && resource.data.createdBy == me().empId);
+    }
+
     // ===== 系統設定 =====
+    // Google 日曆訂閱連結：員工版大家都能讀；主管版（請假含假別）只有主管、主官／副主官、管理員能讀
+    match /settings/calendarLinks {
+      allow get: if isActive();
+      allow write: if isAdmin();
+    }
+    match /settings/calendarSup {
+      allow get: if isAdmin() || isTop() || isSupervisor();
+      allow write: if isAdmin();
+    }
     match /settings/supervisors {
       allow get: if isActive();
       allow write: if isAdmin();

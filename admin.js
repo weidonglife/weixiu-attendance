@@ -9,7 +9,7 @@ import {
   isPart, EMP_TYPE_LABEL, closureWins, closureOf, closureText, notify, callNotify, NOTIFY_URL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY,
   normApproval, topRole, TOP_LABEL, PENDING, stageText, reviewNotes, approvedByText, leaveListOf, LL_KEYS, LL_DAYS, addDays
 } from "./common.js?v=19";
-import { startCalendar } from "./calendar.js?v=1";
+import { startCalendar } from "./calendar.js?v=2";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut
@@ -71,7 +71,7 @@ document.querySelectorAll(".tabs button[data-tab]").forEach(btn => {
   btn.onclick = () => {
     document.querySelectorAll(".tabs button[data-tab]").forEach(b => b.classList.toggle("on", b === btn));
     TABS.forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.tab));
-    if (btn.dataset.tab === "tCal" && !calStop) calStop = startCalendar($("calRoot"));
+    if (btn.dataset.tab === "tCal" && !calStop) { calStop = startCalendar($("calRoot"), { me, full: true, admin: true }); loadCalLinksAdmin(); }
   };
 });
 
@@ -127,7 +127,7 @@ async function syncLeaveList() {
 const LB_KEYS = ["empId", "name", "company", "startDate", "endDate", "startHour", "endHour"];
 async function syncLeaveBoard() {
   const today = todayStr();
-  const want = new Map(approvedLeaves.filter(r => r.endDate >= today)
+  const want = new Map(approvedLeaves.filter(r => r.endDate >= addDays(today, -400)) // 行事曆可以往回看約一年；看板只讀今天以後
     .map(r => [r.id, Object.fromEntries(LB_KEYS.map(k => [k, r[k] ?? null]))]));
   const snap = await getDocs(collection(db, "leaveBoard"));
   const have = new Map(snap.docs.map(d => [d.id, d.data()]));
@@ -620,6 +620,30 @@ $("btnResetPw").onclick = async () => {
     await loadStaff();
   } catch (e) { showMsg(msg, errMsg(e), "err"); }
   $("btnResetPw").disabled = false;
+};
+
+// ===== Google 日曆訂閱連結 =====
+async function loadCalLinksAdmin() {
+  try {
+    const [a, s] = await Promise.all([getDoc(doc(db, "settings", "calendarLinks")), getDoc(doc(db, "settings", "calendarSup"))]);
+    $("calLinkAll").value = a.exists() ? a.data().all || "" : "";
+    $("calLinkSup").value = s.exists() ? s.data().sup || "" : "";
+  } catch (e) { console.warn("calLinks", e); }
+}
+const ICS_RE = /^https:\/\/calendar\.google\.com\/calendar\/ical\/[^\s]+\.ics$/;
+$("btnCalLinks").onclick = async () => {
+  const all = $("calLinkAll").value.trim(), sup = $("calLinkSup").value.trim();
+  for (const [v, n] of [[all, "員工版"], [sup, "主管版"]]) {
+    if (v && !ICS_RE.test(v)) { showMsg($("calLinkMsg"), `${n}的網址格式不對，應該是 https://calendar.google.com/calendar/ical/…/basic.ics`, "err"); return; }
+  }
+  if (all && all === sup) { showMsg($("calLinkMsg"), "員工版和主管版不能是同一個網址", "err"); return; }
+  try {
+    await Promise.all([
+      setDoc(doc(db, "settings", "calendarLinks"), { all, updatedAt: serverTimestamp() }),
+      setDoc(doc(db, "settings", "calendarSup"), { sup, updatedAt: serverTimestamp() })
+    ]);
+    showMsg($("calLinkMsg"), "已儲存。員工到「我的設定」就能把行事曆加到手機。", "ok");
+  } catch (e) { showMsg($("calLinkMsg"), errMsg(e), "err"); }
 };
 
 // ===== 簽核設定：主官／副主官 =====

@@ -13,7 +13,7 @@ import {
 } from "./common.js?v=19";
 import { onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { startBoard } from "./board.js?v=21";
-import { startCalendar } from "./calendar.js?v=1";
+import { startCalendar } from "./calendar.js?v=2";
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot,
   writeBatch, Timestamp
@@ -29,7 +29,8 @@ let holidays = new Map(); // 國定假日
 let myReqs = [];      // 我的請假／加班申請
 let mode = "office";  // office | field
 let boardStop = null; // 今日出勤看板（點分頁時才啟動）
-let calStop = null;   // 出勤月曆（主管才有，點分頁時才啟動）
+let calStop = null;   // 出勤月曆＋公司行事曆（點分頁時才啟動；主管看完整版）
+let calFull = false;
 let approval = normApproval(null); // 主官／副主官設定
 let dirList = [];     // 員工名單（顯示姓名用）
 const deviceId = getDeviceId();
@@ -117,6 +118,41 @@ $("btnChangePw").onclick = async () => {
 
 $("btnLogout").onclick = $("btnBlockedLogout").onclick = () => logout();
 
+// ===== 行事曆 =====
+function openCalendar() {
+  calFull = isSup || !!myTop();
+  calStop = startCalendar($("calRoot"), { me, full: calFull, admin: me && me.role === "admin" });
+}
+
+// Google 日曆／手機行事曆訂閱連結：主管拿主管版（請假含假別），其他人拿員工版
+let calLinks = { all: "", sup: "" };
+async function loadCalLinks() {
+  try { const s = await getDoc(doc(db, "settings", "calendarLinks")); calLinks.all = s.exists() ? s.data().all || "" : ""; } catch (e) { }
+  if (isSup || myTop() || (me && me.role === "admin")) {
+    try { const s = await getDoc(doc(db, "settings", "calendarSup")); calLinks.sup = s.exists() ? s.data().sup || "" : ""; } catch (e) { }
+  }
+  renderCalLink();
+}
+function renderCalLink() {
+  const box = $("calLinkBody");
+  if (!box) return;
+  const sup = !!calLinks.sup && (isSup || !!myTop() || (me && me.role === "admin"));
+  const url = sup ? calLinks.sup : calLinks.all;
+  if (!url) { box.innerHTML = `<p class="muted">管理員還沒設定訂閱連結。</p>`; return; }
+  const webcal = url.replace(/^https?:\/\//, "webcal://");
+  const gcal = "https://calendar.google.com/calendar/r?cid=" + encodeURIComponent(webcal);
+  box.innerHTML = `<p class="muted" style="margin-top:-6px">把公司行事曆${sup ? "（主管版：請假會寫出假別）" : ""}加到手機，公司活動、放假和請假會自動出現，也可以用手機的提醒功能。</p>
+    <div class="acts">
+      <a class="btnlink" href="${esc(webcal)}">加到 iPhone 行事曆</a>
+      <a class="btnlink" href="${esc(gcal)}" target="_blank" rel="noopener">加到 Google 日曆</a>
+      <button type="button" class="secondary small" id="btnCopyCal">複製連結</button>
+    </div>
+    <p class="muted" style="font-size:12px">Android 手機請按「加到 Google 日曆」，用你的 Google 帳號登入後按「新增」。Google 日曆大約每半天更新一次，iPhone 可以在設定裡改成更常更新。這個連結請不要分享給公司以外的人。</p>`;
+  $("btnCopyCal").onclick = async () => {
+    try { await navigator.clipboard.writeText(url); $("btnCopyCal").textContent = "已複製"; } catch (e) { prompt("請複製這個連結", url); }
+  };
+}
+
 // ===== 我的設定 =====
 function renderMe() {
   if (!me) return;
@@ -158,7 +194,7 @@ document.querySelectorAll("#mainTabs button[data-tab]").forEach(btn => {
     document.querySelectorAll("#mainTabs button[data-tab]").forEach(b => b.classList.toggle("on", b === btn));
     ["pPunch", "pLeave", "pBoard", "pReview", "pCal", "pMe"].forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.tab));
     if (btn.dataset.tab === "pMe") renderMe();
-    if (btn.dataset.tab === "pCal" && !calStop) calStop = startCalendar($("calRoot"));
+    if (btn.dataset.tab === "pCal" && !calStop) openCalendar();
     if (btn.dataset.tab === "pBoard" && !boardStop) boardStop = startBoard($("boardRoot"));
   };
 });
@@ -487,6 +523,8 @@ async function loadAgents() {
     dirList = all;
     renderMyRequests();
     isSup = all.some(p => p.empId === me.empId && p.sup === true);
+    if (calStop && !calFull && (isSup || myTop())) { calStop(); openCalendar(); } // 剛確認是主管 → 換成完整版
+    loadCalLinks();
     loadReview();
     const list = all.filter(p => p.empId && p.empId !== me.empId);
     $("lvAgent").innerHTML = '<option value="">（不指定）</option>' +
@@ -813,7 +851,6 @@ function loadReview() {
 
   const show = isSup || !!myTop() || teamReqs.length > 0 || teamCors.length > 0;
   $("tabReview").classList.toggle("hidden", !show);
-  $("tabCal").classList.toggle("hidden", !(isSup || myTop()));
   if ((isSup || myTop()) && !llUnsub) watchLeaveList();
   const n = items.length;
   $("revCount").textContent = n ? `(${n})` : "";

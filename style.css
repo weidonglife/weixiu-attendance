@@ -201,3 +201,14 @@ footer.note { text-align: center; color: var(--muted); font-size: 12px; padding:
 .me-info { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px 16px; }
 .me-info div { display: flex; flex-direction: column; gap: 2px; font-size: 15px; }
 .me-info .muted { font-size: 12px; }
+.cc.ev { background: #efe8fb; color: #6a3fb5; }
+.cal .dot.ev { background: #8a5cd6; }
+.cal-head [data-c="add"] { margin-left: auto; }
+.cal-head select { margin-left: 0; }
+.cal-form { margin-top: 14px; padding: 14px; border: 1px solid #d9cdf3; border-radius: 12px; background: #fbf9ff; }
+.cal-form h3 { margin: 0 0 6px; font-size: 16px; }
+.cal-form .chk { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+.cal-form .chk input { width: auto; }
+.cal-ev { padding: 8px 10px; margin-bottom: 6px; border-left: 4px solid #8a5cd6; background: #faf8fe; border-radius: 6px; }
+.cal-ev .t { font-size: 15px; }
+.cal-ev .acts { margin-top: 6px; }
