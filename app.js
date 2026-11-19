@@ -231,6 +231,31 @@ async function initMain() {
   loadLine();
   initShifts();
   loadAgents();
+  loadUpcomingEvents();
+}
+
+// ===== 打卡頁：今天、明天的公司活動 =====
+const EV_CAT = { trip: ["行程", "trip"], training: ["訓練", "trn"] };
+async function loadUpcomingEvents() {
+  try {
+    const t = todayStr(), t1 = addDays(t, 1);
+    const snap = await getDocs(query(collection(db, "events"), where("endDate", ">=", t)));
+    const evs = snap.docs.map(d => d.data()).filter(e => e.startDate <= t1);
+    const day = d => evs.filter(e => e.startDate <= d && e.endDate >= d)
+      .sort((a, b) => (a.allDay ? "" : a.startTime).localeCompare(b.allDay ? "" : b.startTime));
+    const list = (d, label) => {
+      const a = day(d);
+      return `<div class="ev-day"><div class="ev-h">${label} <span class="muted">${esc(fmtDateStr(d))}</span></div>${a.length
+        ? a.map(e => {
+            const c = EV_CAT[e.category] || ["", "ev"];
+            const when = e.allDay || e.startDate !== d && e.endDate !== d ? "整天" : `${e.startDate === d ? esc(e.startTime) : ""}–${e.endDate === d ? esc(e.endTime) : ""}`;
+            return `<div class="ev-it"><span class="cc ${c[1]}">${c[0] || "活動"}</span><span class="ev-w">${when}</span><span>${e.company ? `［${esc(e.company)}］` : ""}${esc(e.title)}${e.location ? `<span class="muted">＠${esc(e.location)}</span>` : ""}</span></div>`;
+          }).join("")
+        : '<div class="muted small">沒有活動</div>'}</div>`;
+    };
+    $("evBody").innerHTML = list(t, "今天") + list(t1, "明天");
+    $("evCard").classList.toggle("hidden", !evs.length);
+  } catch (e) { console.warn("events", e); $("evCard").classList.add("hidden"); }
 }
 
 // ===== 兼職：上班預告 =====
