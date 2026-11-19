@@ -57,6 +57,12 @@ body.dark-page .wrap.wide { padding-top: 12px; }
 body.dark-page input { background: #06192a; color: #e4eff6; border-color: #18435d; }
 header.top .inner { max-width: 1000px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 header.top h1 { font-size: 18px; margin: 0; }
+/* WeiWork 品牌：大字英文、小字中文 */
+header.top h1.ww { display: flex; flex-direction: column; line-height: 1.1; letter-spacing: .02em; font-size: 19px; }
+header.top h1.ww small { font-size: 11px; font-weight: 500; letter-spacing: .12em; opacity: .75; margin-top: 2px; }
+.ww-hero { text-align: center; margin: 4px 0 18px; }
+.ww-hero .ww-name { font-size: 30px; font-weight: 800; letter-spacing: .02em; color: var(--primary); }
+.ww-hero .ww-sub { font-size: 13px; color: var(--muted); letter-spacing: .08em; margin-top: 2px; }
 header.top .who { font-size: 14px; opacity: .9; text-align: right; }
 .card {
   background: var(--card);
