@@ -72,6 +72,7 @@ document.querySelectorAll(".tabs button[data-tab]").forEach(btn => {
     document.querySelectorAll(".tabs button[data-tab]").forEach(b => b.classList.toggle("on", b === btn));
     TABS.forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.tab));
     if (btn.dataset.tab === "tSettle") loadSettle();
+    btn.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
     if (btn.dataset.tab === "tCal" && !calStop) { calStop = startCalendar($("calRoot"), { me, full: true, admin: true }); loadCalLinksAdmin(); edInit(); }
   };
 });
@@ -191,7 +192,7 @@ async function loadDay() {
       const list = (byEmp[s.empId] || []).sort((a, b) => a.ts - b.ts);
       const wins = leaveByEmp[s.empId] || [];
       const leaveTxt = wins.length ? `<br><span class="muted">${wins.map(w => `${esc(LEAVE_LABEL[w.type] || w.type)} ${w.hours}h`).join("、")}</span>` : "";
-      const nameCell = `<td><span class="empno">${esc(s.empId)}</span>${esc(s.name)}${isPart(s) ? ' <span class="tag gray">兼職</span>' : ""}</td><td>${esc(s.company)}</td>`;
+      const nameCell = `<td class="c-name"><span class="empno">${esc(s.empId)}</span>${esc(s.name)}${isPart(s) ? ' <span class="tag gray">兼職</span>' : ""}</td><td class="c-co">${esc(s.company)}</td>`;
       if (!list.length) {
         let tags;
         if (isPart(s) && shiftOf[s.empId]) {
@@ -207,7 +208,7 @@ async function loadDay() {
           if (sum.fullLeave || sum.closedAll) tags = sum.tags;
           else tags = [["warn", isToday ? "尚未打卡" : "未打卡"]].concat(wins.length ? [["field", `請假 ${sum.leaveHours}h`]] : []).concat(sum.tags.filter(t => t[0] === "gray"));
         }
-        return `<tr>${nameCell}<td>—</td><td>—</td><td>${tagsHtml(tags)}</td><td>${leaveTxt}</td></tr>`;
+        return `<tr class="nopunch">${nameCell}<td class="c-in" data-l="上班">—</td><td class="c-out" data-l="下班">—</td><td class="c-st">${tagsHtml(tags)}</td><td class="c-dt">${leaveTxt}</td></tr>`;
       }
       const sum = summarizeDay(list, wins.concat(closureWins(ds, holidays)), isPart(s));
       let tags = isToday ? sum.tags.filter(t => t[1] !== "未打下班卡" && t[1] !== "早退") : sum.tags;
@@ -219,8 +220,8 @@ async function loadDay() {
         return `${fmtTime(p.ts)} ${TYPE_LABEL[p.type]}・${MODE_LABEL[p.mode]}${where_}${map}`;
       }).join("<br>");
       return `<tr>${nameCell}
-        <td>${sum.firstIn ? fmtTime(sum.firstIn.ts) : "—"}</td><td>${sum.lastOut ? fmtTime(sum.lastOut.ts) : "—"}</td>
-        <td>${tagsHtml(tags.length ? tags : [["ok", "正常"]])}</td><td class="muted">${detail}${leaveTxt}</td></tr>`;
+        <td class="c-in" data-l="上班">${sum.firstIn ? fmtTime(sum.firstIn.ts) : "—"}</td><td class="c-out" data-l="下班">${sum.lastOut ? fmtTime(sum.lastOut.ts) : "—"}</td>
+        <td class="c-st">${tagsHtml(tags.length ? tags : [["ok", "正常"]])}</td><td class="c-dt muted">${detail}${leaveTxt}</td></tr>`;
     });
     body.innerHTML = rows.join("") || `<tr><td colspan="6" class="muted">尚未建立員工</td></tr>`;
   } catch (e) { body.innerHTML = `<tr><td colspan="6">${esc(errMsg(e))}</td></tr>`; }
