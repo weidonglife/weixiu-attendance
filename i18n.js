@@ -3,7 +3,7 @@
 //   對照表在 i18n-en.js：EXACT（整句對照）、PATS（有變數的句子）、WORDS（句子裡的常用詞）
 //   使用者自己輸入的內容（事由、活動名稱、地點、姓名…）放在 translate="no" 裡，不會被翻譯
 //   LINE 通知服務也會下載 i18n-en.js，用同一份對照表翻譯英文同仁的通知
-import { makeTr } from "./i18n-en.js?v=2";
+import { makeTr } from "./i18n-en.js?v=3";
 
 const KEY = "wx_lang";
 const ADMIN_PAGE = /\/(admin|board|setup|phone|stage)\.html$/.test(location.pathname);

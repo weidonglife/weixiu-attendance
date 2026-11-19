@@ -24,6 +24,7 @@ export const EXACT = {
   // ===== 頁首、登入 =====
   "WeiWork｜唯修集團 員工平台": "WeiWork | WEIXIU Group Staff Portal",
   "唯修集團 員工平台": "WEIXIU Group Staff Portal",
+  "唯修集團・員工平台": "STAFF PORTAL",
   "唯修集團 員工平台・一起把事做好": "WEIXIU Group Staff Portal · Getting things done together",
   "WEIXIU 唯修": "WEIXIU",
   "載入中…": "Loading…",

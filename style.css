@@ -35,7 +35,7 @@ header.top::after {
   background: linear-gradient(90deg, #1468b8, var(--wx-blue) 55%, var(--wx-green));
 }
 header.top .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-header.top .brand img { height: 30px; width: auto; flex-shrink: 0; }
+header.top .brand img { height: 34px; width: auto; flex-shrink: 0; }
 header.top h1 { letter-spacing: .06em; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--wx-blue); outline-offset: 2px; }
 /* 看板專用全螢幕深色頁 */
@@ -58,10 +58,19 @@ body.dark-page input { background: #06192a; color: #e4eff6; border-color: #18435
 header.top .inner { max-width: 1000px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 header.top h1 { font-size: 18px; margin: 0; }
 /* WeiWork 品牌：大字英文、小字中文 */
-header.top h1.ww { display: flex; flex-direction: column; line-height: 1.1; letter-spacing: .02em; font-size: 19px; }
-header.top h1.ww small { font-size: 11px; font-weight: 500; letter-spacing: .12em; opacity: .75; margin-top: 2px; }
+/* WeiWork 字標（B1）：wei 白／work 綠，o 是打勾的圓圈；下面的中文和字標同寬 */
+.wm { font-family: "Space Grotesk", system-ui, sans-serif; font-weight: 700; letter-spacing: -.02em; line-height: 1; white-space: nowrap; }
+.wm-a { color: #fff; }
+.wm-b { color: #8fd14f; }
+.wm-o { width: .645em; height: .645em; vertical-align: -.08em; margin: 0 .015em; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+header.top h1.ww { display: inline-flex; flex-direction: column; line-height: 1; letter-spacing: 0; font-size: 26px; }
+header.top h1.ww small { font-size: 10.5px; font-weight: 500; letter-spacing: 0; color: #bcd0de; text-align: justify; text-align-last: justify; margin-top: 0; }
+html.lang-en header.top h1.ww small { white-space: nowrap; font-size: 10px; text-align-last: auto; letter-spacing: .4em; }
 .ww-hero { text-align: center; margin: 4px 0 18px; }
-.ww-hero .ww-name { font-size: 30px; font-weight: 800; letter-spacing: .02em; color: var(--primary); }
+.ww-hero .ww-name { font-size: 44px; line-height: 1.1; }
+.ww-hero .wm-a { color: #1468b8; }
+.ww-hero .wm-b { color: #4f9a1f; }
 .ww-hero .ww-sub { font-size: 13px; color: var(--muted); letter-spacing: .08em; margin-top: 2px; }
 header.top .who { font-size: 14px; opacity: .9; text-align: right; }
 .card {

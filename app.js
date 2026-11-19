@@ -12,7 +12,7 @@ import {
   approvedByText, TOP_LABEL, PENDING, leaveListOf, LL_DAYS, LEAVE_LABEL, timelineHtml, EVENT_CATS
 } from "./common.js?v=27";
 import { onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { adoptUserLang, setLangSaver } from "./i18n.js?v=2";
+import { adoptUserLang, setLangSaver } from "./i18n.js?v=3";
 import { startBoard } from "./board.js?v=30";
 import { startCalendar } from "./calendar.js?v=15";
 import {
