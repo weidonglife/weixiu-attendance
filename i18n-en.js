@@ -358,6 +358,9 @@ export const EXACT = {
   "要取消請傳「解除綁定」。": "To unlink, send “解除綁定”.",
   "依勞動基準法第 38 條，您本年度的特別休假如下：": "Under Article 38 of the Labor Standards Act, your annual leave for this year is:",
   "請在期間內和主管討論排休，到期沒休完的天數依法結算。": "Please plan your leave with your supervisor within this period. Days not used by the end are settled according to the law.",
+  "請改用手機瀏覽器開啟": "Please open this in your phone's browser",
+  "你現在是在 LINE 裡面開啟 WeiWork。WeiWork 綁定的是你手機上的 Safari 或 Chrome，在 LINE 裡登入會顯示「這支手機尚未綁定」。": "You opened WeiWork inside LINE. WeiWork is registered to Safari or Chrome on your phone, so signing in inside LINE shows “This phone isn't registered”.",
+  "用瀏覽器開啟": "Open in browser",
   // ===== 錯誤訊息 =====
   "員工編號只能用英文字母、數字（可含 - 或 _），最多 20 個字": "Employee IDs can only use letters and numbers (plus - or _), up to 20 characters",
   "員工編號不正確，請再確認一次": "That employee ID isn't valid. Please check it",

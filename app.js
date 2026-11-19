@@ -12,7 +12,7 @@ import {
   approvedByText, TOP_LABEL, PENDING, leaveListOf, LL_DAYS, LEAVE_LABEL, timelineHtml, EVENT_CATS
 } from "./common.js?v=27";
 import { onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { adoptUserLang, setLangSaver } from "./i18n.js?v=1";
+import { adoptUserLang, setLangSaver } from "./i18n.js?v=2";
 import { startBoard } from "./board.js?v=30";
 import { startCalendar } from "./calendar.js?v=15";
 import {
@@ -35,6 +35,16 @@ let calFull = false;
 let approval = normApproval(null); // 主官／副主官設定
 let dirList = [];     // 員工名單（顯示姓名用）
 const deviceId = getDeviceId();
+
+// LINE 內建瀏覽器：提醒改用手機瀏覽器（LINE 看到 openExternalBrowser=1 會改用 Safari／Chrome 開啟）
+if (/\bLine\//i.test(navigator.userAgent)) {
+  $("lineWarn").classList.remove("hidden");
+  $("btnOpenExt").onclick = () => {
+    const u = new URL(location.href);
+    u.searchParams.set("openExternalBrowser", "1");
+    location.href = u.toString();
+  };
+}
 
 // ===== 時鐘（僅顯示用，實際打卡時間由伺服器決定）=====
 function tick() {
@@ -211,6 +221,7 @@ document.querySelectorAll("#mainTabs button[data-tab]").forEach(btn => {
     document.querySelectorAll("#mainTabs button[data-tab]").forEach(b => b.classList.toggle("on", b === btn));
     ["pPunch", "pLeave", "pBoard", "pReview", "pCal", "pEv", "pMe"].forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.tab));
     if (btn.dataset.tab === "pEv") loadUpcomingEvents();
+    $("who").classList.toggle("on", btn.dataset.tab === "pMe");
     if (btn.dataset.tab === "pMe") renderMe();
     if (btn.dataset.tab === "pCal" && !calStop) openCalendar();
     if (btn.dataset.tab === "pBoard" && !boardStop) boardStop = startBoard($("boardRoot"));
@@ -1004,6 +1015,8 @@ async function addCorrectionPunch(batch, c) {
 }
 
 $("revBanner").onclick = () => $("tabReview").click();
+// 右上角的名字＝「我的設定」
+$("who").onclick = () => { if (!me) return; document.querySelector('#mainTabs [data-tab="pMe"]').click(); window.scrollTo(0, 0); };
 $("revList").onclick = async e => {
   const btn = e.target.closest("button[data-act]");
   if (!btn) return;
