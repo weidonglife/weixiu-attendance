@@ -842,9 +842,9 @@ async function loadSettle() {
       return { s, ent, cur, prev: prev && prev.end > goLive ? prev : null, comp: compLots(reqs, today, s.hireDate, s.compSettle || {}), today };
     });
     body.innerHTML = settleRows.map(({ s, ent, cur, prev }) => {
-      const who = `<td><span class="empno">${esc(s.empId)}</span>${esc(s.name)}</td>`;
-      if (!s.hireDate) return `<tr>${who}<td colspan="7"><span class="tag warn">未設定到職日</span></td>${noticeCell(s, null)}</tr>`;
-      let p = `<td colspan="5" class="muted">—</td>`;
+      const who = `<td class="c-who"><span class="empno">${esc(s.empId)}</span>${esc(s.name)}</td>`;
+      if (!s.hireDate) return `<tr>${who}<td colspan="7" class="c-full"><span class="tag warn">未設定到職日</span></td>${noticeCell(s, null)}</tr>`;
+      let p = `<td colspan="5" class="muted c-noprev">—</td>`;
       if (prev) {
         const st = prev.settle;
         const act = st
@@ -854,15 +854,15 @@ async function loadSettle() {
           : `<span class="muted small">應於 ${esc(addDays(prev.end, 29))} 前發給（或下次發薪日）</span><br>
              <button class="small" data-st="pay" data-uid="${s.uid}" data-start="${prev.start}">全部發給工資</button>
              ${prev.deferrable > 0 ? `<button class="small secondary" data-st="defer" data-uid="${s.uid}" data-start="${prev.start}">遞延一年${prev.payOnly ? `（另發 ${fmtHours(prev.payOnly)}）` : ""}</button>` : ""}`;
-        p = `<td>${esc(prev.start)} ～ ${esc(addDays(prev.end, -1))}</td><td>${fmtHours(prev.total)}${prev.carry ? `<br><span class="muted">含遞延 ${fmtHours(prev.carry)}</span>` : ""}</td>
-          <td>${fmtHours(prev.used)}</td><td><b>${fmtHours(prev.unused)}</b></td><td>${act}</td>`;
+        p = `<td class="c-prev" data-l="已結束年度（待結算）">${esc(prev.start)} ～ ${esc(addDays(prev.end, -1))}</td><td class="c-tot" data-l="應休">${fmtHours(prev.total)}${prev.carry ? `<br><span class="muted">含遞延 ${fmtHours(prev.carry)}</span>` : ""}</td>
+          <td class="c-used" data-l="已休">${fmtHours(prev.used)}</td><td class="c-un" data-l="未休"><b>${fmtHours(prev.unused)}</b></td><td class="c-act">${act}</td>`;
       }
       const left = cur ? cur.total - cur.used : 0;
       const daysLeft = cur ? Math.round((Date.parse(cur.end) - Date.parse(todayStr())) / 86400000) : null;
       const c = cur
-        ? `<td>${esc(cur.start)} ～ ${esc(addDays(cur.end, -1))}<br><span class="muted">剩 ${daysLeft} 天結束</span></td>
-           <td><b>${fmtHours(left)}</b>${cur.carry ? `<br><span class="muted">含遞延 ${fmtHours(cur.carry)}</span>` : ""}${daysLeft <= 60 && left > 0 ? '<br><span class="tag warn">請提醒排休</span>' : ""}</td>`
-        : `<td colspan="2" class="muted">${ent ? esc(ent.end) + " 起可休" : "—"}</td>`;
+        ? `<td class="c-cur" data-l="本年度">${esc(cur.start)} ～ ${esc(addDays(cur.end, -1))}<br><span class="muted">剩 ${daysLeft} 天結束</span></td>
+           <td class="c-left" data-l="剩餘"><b>${fmtHours(left)}</b>${cur.carry ? `<br><span class="muted">含遞延 ${fmtHours(cur.carry)}</span>` : ""}${daysLeft <= 60 && left > 0 ? '<br><span class="tag warn">請提醒排休</span>' : ""}</td>`
+        : `<td colspan="2" class="muted c-full" data-l="本年度">${ent ? esc(ent.end) + " 起可休" : "—"}</td>`;
       return `<tr class="${prev && !prev.settle && prev.unused > 0 ? "hl" : ""}">${who}${p}${c}${noticeCell(s, cur, left)}</tr>`;
     }).join("") || `<tr><td colspan="9" class="muted">沒有員工</td></tr>`;
 
@@ -876,9 +876,9 @@ async function loadSettle() {
     });
     crow.sort((a, b) => (a.st === "paid") - (b.st === "paid") || a.l.exp.localeCompare(b.l.exp));
     // 補休期限末日＝到期日（exp）前一天
-    cbody.innerHTML = crow.map(({ s, l, st }) => `<tr class="${st === "expired" ? "hl" : ""}"><td><span class="empno">${esc(s.empId)}</span>${esc(s.name)}</td>
-      <td>${esc(l.date)}</td><td>${esc(addDays(l.exp, -1))}</td><td>${fmtHours(st === "paid" ? Number(l.paid.hours) || 0 : l.left)}</td>
-      <td>${st === "expired"
+    cbody.innerHTML = crow.map(({ s, l, st }) => `<tr class="${st === "expired" ? "hl" : ""}"><td class="c-who"><span class="empno">${esc(s.empId)}</span>${esc(s.name)}</td>
+      <td class="c-a" data-l="加班日期">${esc(l.date)}</td><td class="c-b" data-l="補休期限">${esc(addDays(l.exp, -1))}</td><td class="c-c" data-l="未休時數">${fmtHours(st === "paid" ? Number(l.paid.hours) || 0 : l.left)}</td>
+      <td class="c-act">${st === "expired"
         ? `<span class="tag late">已到期，改發加班費</span><br><span class="muted small">應於 ${esc(compPayDeadline(l.exp))} 前發給（或下次發薪日），依加班當日標準計算</span><br>
            <button class="small" data-ct="pay" data-uid="${s.uid}" data-lot="${esc(l.id)}">已發給</button>`
         : st === "paid"
@@ -937,7 +937,7 @@ function noticeCell(s, cur, left = 0) {
     h += `<div class="small ${grant || before ? "muted" : "warn-t"}">本年度告知：${grant ? esc(fmtTs(grant.sentAt).slice(0, 10)) : before ? "系統上線前（無系統紀錄）" : "尚未送達"}</div>`;
   }
   if (cur && left > 0 && NOTIFY_URL) h += `<button class="small secondary" data-an="${esc(s.empId)}">立即提醒排休</button>`;
-  return `<td>${h}</td>`;
+  return `<td class="c-nt" data-l="特休通知">${h}</td>`;
 }
 $("stBody").addEventListener("click", async e => {
   const btn = e.target.closest("button[data-an]");

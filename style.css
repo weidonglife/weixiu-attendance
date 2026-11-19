@@ -339,6 +339,27 @@ header.top .who:empty + .lang-btn { margin-left: auto; }
   #tToday > .row h2 { flex: 1 0 100%; }
   #tToday > .row #dayPick { max-width: none !important; flex: 1 1 0; min-width: 0; }
   #tToday > .row #btnReloadDay { flex: 0 0 auto; }
+  /* 特休／補休結算：每位員工一張小卡 */
+  .st-tbl thead { display: none; }
+  .st-tbl, .st-tbl tbody { display: block; }
+  .st-tbl tr { display: flex; flex-wrap: wrap; gap: 8px 10px; padding: 14px 2px; border-bottom: 1px solid #e3e9f0; }
+  .st-tbl tr.hl { background: #fff6e8; padding: 14px 10px; border-radius: 10px; margin: 6px 0; }
+  .st-tbl tr.hl td { background: transparent; }
+  .st-tbl td { display: block; border: 0; padding: 0; min-width: 0; flex: 1 1 100%; }
+  .st-tbl td[data-l]::before { content: attr(data-l); display: block; font-size: 12px; color: var(--muted, #6b7a8c); margin-bottom: 1px; }
+  .st-tbl .c-who { font-weight: 600; font-size: 16px; }
+  .st-tbl .c-who .empno { margin-right: 6px; }
+  .st-tbl .c-cur { flex: 1 1 0; }
+  .st-tbl .c-left { flex: 0 0 auto; text-align: right; }
+  .st-tbl .c-noprev { display: none; }
+  .st-tbl .c-prev { padding-top: 8px; border-top: 1px dashed #e0c9a6; }
+  .st-tbl .c-tot, .st-tbl .c-used, .st-tbl .c-un { flex: 1 1 0; }
+  .st-tbl .c-act:empty { display: none; }
+  .st-tbl .c-act button { margin: 4px 6px 0 0; }
+  .st-tbl .c-nt { background: #f5f8fb; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+  .st-tbl tr.hl .c-nt { background: #fff; }
+  .st-tbl .c-nt button { margin-top: 6px; }
+  .ct-tbl .c-a, .ct-tbl .c-b, .ct-tbl .c-c { flex: 1 1 0; }
 }
 
 /* 兩欄並排（手機也維持兩欄） */
