@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=46">
+<link rel="stylesheet" href="style.css?v=47">
 <link rel="stylesheet" href="board.css?v=20">
 </head>
 <body>
@@ -172,8 +172,10 @@
 
     <div class="card">
       <h2>申請請假</h2>
-      <label for="lvType">假別</label>
-      <select id="lvType"></select>
+      <div class="row row2">
+        <div><label for="lvType">假別</label><select id="lvType"></select></div>
+        <div><label for="lvAgent">代理人（選填）</label><select id="lvAgent"><option value="">（不指定）</option></select></div>
+      </div>
       <p id="lvTypeNote" class="muted" style="margin:4px 0 0"></p>
       <div class="row">
         <div><label for="lvStartDate">開始日期</label><input id="lvStartDate" type="date"></div>
@@ -186,8 +188,6 @@
       <p id="lvCalc" class="calc"></p>
       <label for="lvReason">事由（必填）</label>
       <textarea id="lvReason"></textarea>
-      <label for="lvAgent">代理人（選填）</label>
-      <select id="lvAgent"><option value="">（不指定）</option></select>
       <button id="btnLeave" class="block">送出請假申請</button>
       <div id="lvMsg" class="msg hidden"></div>
     </div>
