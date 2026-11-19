@@ -377,6 +377,21 @@ header.top .who:empty + .lang-btn { margin-left: auto; }
   .ano-tbl { font-size: 14px; }
   .ano-tbl th, .ano-tbl td { padding-left: 4px; padding-right: 4px; }
   .ano-tbl .ano-chips { display: block; margin: 4px 0 0 16px; }
+  /* 特休／補休餘額總覽：每位員工一張小卡 */
+  .bal-tbl thead { display: none; }
+  .bal-tbl, .bal-tbl tbody { display: block; }
+  .bal-tbl tr { display: flex; flex-wrap: wrap; gap: 8px 10px; padding: 14px 2px; border-bottom: 1px solid #e3e9f0; }
+  .bal-tbl tr.hl { background: #fff6e8; padding: 14px 10px; border-radius: 10px; margin: 6px 0; }
+  .bal-tbl tr.hl td { background: transparent; }
+  .bal-tbl td { display: block; border: 0; padding: 0; min-width: 0; }
+  .bal-tbl td[data-l]::before { content: attr(data-l); display: block; font-size: 12px; color: var(--muted, #6b7a8c); margin-bottom: 1px; }
+  .bal-tbl .c-who { flex: 1 1 auto; font-weight: 600; font-size: 16px; align-self: center; }
+  .bal-tbl .c-who .empno { margin-right: 6px; }
+  .bal-tbl .c-hire { flex: 0 0 auto; text-align: right; font-size: 13px; }
+  .bal-tbl .c-per { flex: 1 1 100%; }
+  .bal-tbl .c-per br { display: none; } .bal-tbl .c-per .muted { margin-left: 6px; font-size: 13px; }
+  .bal-tbl .c-n { flex: 1 1 0; }
+  .bal-tbl td[colspan] { flex: 1 1 100%; }
 }
 
 /* 兩欄並排（手機也維持兩欄） */

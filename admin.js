@@ -273,9 +273,9 @@ async function loadReport() {
       const warn = b.daysLeft != null && b.daysLeft <= 60 && b.annualLeft > 0;
       const period = !b.hireDate ? '<span class="tag warn">未設定到職日</span>'
         : !b.ent.start ? `${esc(b.ent.end)} 起可休` : `${esc(b.ent.start)} ～ ${esc(b.ent.end)}${b.daysLeft != null ? `<br><span class="muted">剩 ${b.daysLeft} 天結束</span>` : ""}`;
-      return `<tr class="${warn ? "hl" : ""}"><td><span class="empno">${esc(b.empId)}</span>${esc(b.name)}</td>
-        <td>${esc(b.hireDate || "—")}</td><td>${period}</td><td>${!b.ent ? "—" : b.part ? (b.ent.start ? `${b.annualTotal} 小時<br><span class="muted">兼職按比例</span>` : "—") : b.ent.days + " 天"}</td>
-        <td>${fmtHours(b.annualUsed)}</td><td><b>${fmtHours(b.annualLeft)}</b></td><td>${fmtHours(b.compLeft)}</td></tr>`;
+      return `<tr class="${warn ? "hl" : ""}"><td class="c-who"><span class="empno">${esc(b.empId)}</span>${esc(b.name)}</td>
+        <td class="c-hire" data-l="到職日">${esc(b.hireDate || "—")}</td><td class="c-per" data-l="本年度期間">${period}</td><td class="c-n" data-l="年度天數">${!b.ent ? "—" : b.part ? (b.ent.start ? `${b.annualTotal} 小時<br><span class="muted">兼職按比例</span>` : "—") : b.ent.days + " 天"}</td>
+        <td class="c-n" data-l="已用">${fmtHours(b.annualUsed)}</td><td class="c-n" data-l="特休剩餘"><b>${fmtHours(b.annualLeft)}</b></td><td class="c-n" data-l="補休剩餘">${fmtHours(b.compLeft)}</td></tr>`;
     }).join("") || `<tr><td colspan="7" class="muted">沒有員工</td></tr>`;
   } catch (e) {
     body.innerHTML = `<tr><td colspan="14">${esc(errMsg(e))}</td></tr>`;
