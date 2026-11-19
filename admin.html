@@ -150,6 +150,10 @@
           <div><label for="apChief">主官</label><select id="apChief"></select></div>
           <div><label for="apDeputy">副主官</label><select id="apDeputy"></select></div>
         </div>
+        <div class="row" style="margin-top:8px">
+          <div><label for="apRemind">審核逾時提醒（小時）</label><input id="apRemind" type="number" min="0" max="168" step="1" placeholder="24"></div>
+          <div class="muted" style="align-self:end;font-size:13px;line-height:1.6">申請送出後超過這個時數還沒審核，就用 LINE 再提醒目前該審核的人；之後每隔同樣時數再提醒，最多 3 次。夜間 20:00–08:00 不發。填 0＝關閉。</div>
+        </div>
         <button id="btnSaveApproval" style="margin-top:12px">儲存簽核設定</button>
         <div id="apMsg" class="msg hidden"></div>
         <div id="apNow" class="msg err hidden"></div>
@@ -361,6 +365,6 @@
   </div>
 </div>
 
-<script type="module" src="admin.js?v=38"></script>
+<script type="module" src="admin.js?v=39"></script>
 </body>
 </html>

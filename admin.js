@@ -673,17 +673,21 @@ $("calTokBody").addEventListener("click", async e => {
   } catch (err) { showMsg($("ctMsg"), errMsg(err), "err"); btn.disabled = false; }
 });
 
-// ===== 簽核設定：主官／副主官 =====
+// ===== 簽核設定：主官／副主官、審核逾時提醒（remindHours：LINE 通知服務每小時檢查）=====
+let remindHours = 24;
 async function loadApproval() {
   try {
     const snap = await getDoc(doc(db, "settings", "approval"));
     approval = normApproval(snap.exists() ? snap.data() : null);
+    const raw = snap.exists() ? snap.data() : {};
+    remindHours = raw.remindHours == null ? 24 : Number(raw.remindHours);
   } catch (e) { console.warn("approval", e); }
 }
 function fillApprovalCard() {
   const opts = `<option value="">（未設定）</option>` + staff.map(s => `<option value="${esc(s.empId)}">${esc(s.empId)} ${esc(s.name)}</option>`).join("");
   $("apChief").innerHTML = opts; $("apDeputy").innerHTML = opts;
   $("apChief").value = approval.chief || ""; $("apDeputy").value = approval.deputy || "";
+  $("apRemind").value = String(remindHours);
   const warn = [];
   if (approval.chief && !staff.some(s => s.empId === approval.chief)) warn.push(`主官 ${approval.chief} 已不在在職名單`);
   if (approval.deputy && !staff.some(s => s.empId === approval.deputy)) warn.push(`副主官 ${approval.deputy} 已不在在職名單`);
@@ -694,11 +698,13 @@ function fillApprovalCard() {
 $("btnSaveApproval").onclick = async () => {
   const chief = $("apChief").value || null, deputy = $("apDeputy").value || null;
   if (chief && chief === deputy) { showMsg($("apMsg"), "主官和副主官不能是同一個人", "err"); return; }
+  const rh = $("apRemind").value.trim() === "" ? 24 : Number($("apRemind").value);
+  if (!Number.isInteger(rh) || rh < 0 || rh > 168) { showMsg($("apMsg"), "審核逾時提醒請填 0～168 的整數（0＝關閉）", "err"); return; }
   $("btnSaveApproval").disabled = true;
   try {
-    await setDoc(doc(db, "settings", "approval"), { chief, deputy, updatedBy: me.empId, updatedAt: serverTimestamp() });
-    approval = normApproval({ chief, deputy });
-    showMsg($("apMsg"), `已儲存：主官 ${chief ? staffName(chief) : "未設定"}、副主官 ${deputy ? staffName(deputy) : "未設定"}。員工重新整理打卡頁後生效。`, "ok");
+    await setDoc(doc(db, "settings", "approval"), { chief, deputy, remindHours: rh, remindMax: 3, updatedBy: me.empId, updatedAt: serverTimestamp() });
+    approval = normApproval({ chief, deputy }); remindHours = rh;
+    showMsg($("apMsg"), `已儲存：主官 ${chief ? staffName(chief) : "未設定"}、副主官 ${deputy ? staffName(deputy) : "未設定"}；審核逾時提醒：${rh ? rh + " 小時" : "關閉"}。員工重新整理打卡頁後生效。`, "ok");
     await loadStaff();
     loadPendingRequests(); loadCorrections();
   } catch (e) { showMsg($("apMsg"), errMsg(e), "err"); }
