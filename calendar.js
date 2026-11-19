@@ -116,10 +116,11 @@ export function startCalendar(root, opts = {}) {
     return m;
   }
 
-  // 手機版格子裡的小圓點：紫＝活動、綠＝已核准請假、橘＝審核中、藍＝兼職
+  // 手機版格子裡的小圓點（顏色和舊 Google 日曆一致）：藍＝請假（已核准）、橘＝審核中、黃綠＝行程、粉紅＝訓練、紫＝一般活動、青＝兼職
   function cnt(day) {
     const ok = day.lv.filter(x => x.r.status === "approved").length, pd = day.lv.length - ok;
-    return [[day.ev.length, "ev"], [ok, "lv"], [pd, "pd"], [day.sh.length, "sh"]]
+    const ec = c => day.ev.filter(e => catOf(e)[1] === c).length;
+    return [[ok, "lv"], [pd, "pd"], [ec("trip"), "trip"], [ec("trn"), "trn"], [ec("ev"), "ev"], [day.sh.length, "sh"]]
       .filter(([n]) => n).map(([n, c]) => `<span><i class="dot ${c}"></i>${n}</span>`).join(" ");
   }
 

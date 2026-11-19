@@ -184,14 +184,16 @@ footer.note { text-align: center; color: var(--muted); font-size: 12px; padding:
 .cal .chips { display: flex; flex-direction: column; gap: 2px; }
 .cal .cc { display: block; font-size: 11px; line-height: 1.5; padding: 0 5px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-legend .cc { display: inline-block; }
-.cc.ok { background: #e6f4ec; color: var(--green); }
+.cc.ok { background: #dff1fb; color: #01579b; }   /* 請假：舊「休假表」的藍色 #039BE5 */
 .cc.pend { background: #fff; color: var(--orange); border: 1px dashed var(--orange); }
-.cc.shift { background: #e8f1fb; color: var(--primary); }
+.cc.shift { background: #e3f2ef; color: #23695e; }
 .cal .more { font-size: 11px; color: var(--muted); }
 .cal .cnt { display: none; font-size: 11px; color: var(--muted); }
 .cal .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 2px; vertical-align: 0; }
-.cal .dot.lv { background: var(--green); }
-.cal .dot.sh { background: var(--primary); }
+.cal .dot.lv { background: #039be5; }
+.cal .dot.sh { background: #2a9d8f; }
+.cal .dot.trip { background: #c0ca33; }
+.cal .dot.trn { background: #e67c73; }
 .cal-day { margin-top: 14px; }
 .cal-day h3 { font-size: 16px; margin: 0 0 8px; }
 .cal-day h4 { font-size: 14px; margin: 12px 0 4px; color: var(--muted); }
@@ -239,9 +241,9 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 .tl { margin: 6px 0 2px; padding: 6px 10px; background: #f6f8fb; border-radius: 8px; font-size: 13px; color: var(--muted); line-height: 1.7; }
 .tl .tl-i { display: inline-block; width: 1.6em; }
 td .tl { margin-top: 4px; padding: 4px 8px; font-size: 12px; }
-.cc.trip { background: #e0f4f1; color: #127566; }
-.cc.trn { background: #fdf0d9; color: #9a5b00; }
-.cal-ev.trip { border-left-color: #1a9c88; background: #f5fbfa; }
-.cal-ev.trn { border-left-color: #d98a12; background: #fffaf2; }
+.cc.trip { background: #f1f4cc; color: #5f6610; }   /* 行程：舊「行程表」的黃綠 #C0CA33 */
+.cc.trn { background: #fbe3e1; color: #a3362c; }   /* 訓練：舊「訓練表」的粉紅 #E67C73 */
+.cal-ev.trip { border-left-color: #c0ca33; background: #fbfcef; }
+.cal-ev.trn { border-left-color: #e67c73; background: #fdf6f5; }
 .cal-ev .cc.cat { display: inline-block; font-size: 11px; vertical-align: 2px; }
 .cal-head [data-c="cat"] { width: auto; }

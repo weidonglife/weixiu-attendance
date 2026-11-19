@@ -13,7 +13,7 @@ import {
 } from "./common.js?v=26";
 import { onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { startBoard } from "./board.js?v=28";
-import { startCalendar } from "./calendar.js?v=11";
+import { startCalendar } from "./calendar.js?v=12";
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot,
   writeBatch, Timestamp
