@@ -124,7 +124,7 @@ function openCalendar() {
   calStop = startCalendar($("calRoot"), { me, full: calFull, admin: me && me.role === "admin" });
 }
 
-// 手機行事曆訂閱：每人專屬連結（calTokens/{uid}）。內容由通知服務依「現在」的身分決定主管版或員工版
+// 手機行事曆訂閱：每人專屬連結（calTokens/{uid}）。所有人都是同一版（請假只寫「請假」，假別只在系統內查看）
 let calToken = "";
 function newToken() {
   const a = new Uint8Array(20); crypto.getRandomValues(a);
@@ -144,11 +144,10 @@ function renderCalLink() {
   const box = $("calLinkBody");
   if (!box) return;
   if (!calToken || !NOTIFY_URL) { box.innerHTML = `<p class="muted">暫時無法取得訂閱連結，請稍後再試。</p>`; return; }
-  const sup = isSup || !!myTop() || (me && me.role === "admin");
   const url = `${NOTIFY_URL}?ics=${calToken}`;
   const webcal = url.replace(/^https?:\/\//, "webcal://");
   const gcal = "https://calendar.google.com/calendar/r?cid=" + encodeURIComponent(webcal);
-  box.innerHTML = `<p class="muted" style="margin-top:-6px">把公司行事曆${sup ? "（主管版：請假會寫出假別）" : ""}加到手機，公司活動、放假和請假會自動出現，也可以用手機的提醒功能。</p>
+  box.innerHTML = `<p class="muted" style="margin-top:-6px">把公司行事曆加到手機，公司活動、放假和請假會自動出現，也可以用手機的提醒功能。</p>
     <div class="acts">
       <a class="btnlink" href="${esc(webcal)}">加到 iPhone 行事曆</a>
       <a class="btnlink" href="${esc(gcal)}" target="_blank" rel="noopener">加到 Google 日曆</a>

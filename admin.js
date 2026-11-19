@@ -645,20 +645,17 @@ $("btnResetPw").onclick = async () => {
 // ===== 手機行事曆訂閱：每人專屬連結（calTokens/{uid}）=====
 async function loadCalLinksAdmin() {
   const body = $("calTokBody");
-  body.innerHTML = `<tr><td colspan="4" class="muted">讀取中…</td></tr>`;
+  body.innerHTML = `<tr><td colspan="3" class="muted">讀取中…</td></tr>`;
   try {
-    const [snap, sv] = await Promise.all([getDocs(collection(db, "calTokens")), getDoc(doc(db, "settings", "supervisors"))]);
+    const snap = await getDocs(collection(db, "calTokens"));
     const has = new Map(snap.docs.map(d => [d.id, d.data()]));
-    const sups = new Set(sv.exists() ? sv.data().ids || [] : []);
     body.innerHTML = staff.map(s => {
-      const sup = s.role === "admin" || !!topRole(approval, s.empId) || sups.has(s.empId);
       const t = has.get(s.uid);
       return `<tr><td><span class="empno">${esc(s.empId)}</span>${esc(s.name)}</td>
-        <td>${sup ? '<span class="tag field">主管版</span>' : '<span class="tag gray">員工版</span>'}</td>
         <td>${t ? '<span class="tag ok">已產生</span>' : '<span class="muted">尚未打開</span>'}</td>
         <td>${t ? `<button class="small danger" data-ct="${s.uid}">作廢</button>` : ""}</td></tr>`;
-    }).join("") || `<tr><td colspan="4" class="muted">沒有員工</td></tr>`;
-  } catch (e) { body.innerHTML = `<tr><td colspan="4">${esc(errMsg(e))}</td></tr>`; }
+    }).join("") || `<tr><td colspan="3" class="muted">沒有員工</td></tr>`;
+  } catch (e) { body.innerHTML = `<tr><td colspan="3">${esc(errMsg(e))}</td></tr>`; }
 }
 $("calTokBody").addEventListener("click", async e => {
   const btn = e.target.closest("button[data-ct]");
