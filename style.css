@@ -207,12 +207,12 @@ footer.note { text-align: center; color: var(--muted); font-size: 12px; padding:
 .cal-legend .cc { display: inline-block; }
 .cc.ok { background: #dff1fb; color: #01579b; }   /* 請假：舊「休假表」的藍色 #039BE5 */
 .cc.pend { background: #fff; color: var(--orange); border: 1px dashed var(--orange); }
-.cc.shift { background: #e3f2ef; color: #23695e; }
+.cc.shift { background: #eceff1; color: #546e7a; }
 .cal .more { font-size: 11px; color: var(--muted); }
 .cal .cnt { display: none; font-size: 11px; color: var(--muted); }
 .cal .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 2px; vertical-align: 0; }
 .cal .dot.lv { background: #039be5; }
-.cal .dot.sh { background: #2a9d8f; }
+.cal .dot.sh { background: #90a4ae; }
 .cal .dot.trip { background: #c0ca33; }
 .cal .dot.trn { background: #e67c73; }
 .cal-day { margin-top: 14px; }
@@ -264,6 +264,15 @@ input[type="date"]::-webkit-date-and-time-value, input[type="time"]::-webkit-dat
 td .tl { margin-top: 4px; padding: 4px 8px; font-size: 12px; }
 .cc.trip { background: #f1f4cc; color: #5f6610; }   /* 行程：舊「行程表」的黃綠 #C0CA33 */
 .cc.trn { background: #fbe3e1; color: #a3362c; }   /* 訓練：舊「訓練表」的粉紅 #E67C73 */
+.cc.aud { background: #efe5df; color: #6d4c41; }   /* 稽核：褐 */
+.cc.mtg { background: #e5ebf0; color: #3f5767; }   /* 會議：灰藍 */
+.cc.vis { background: #dcf1ee; color: #0f6b5f; }   /* 客戶來訪：青綠 */
+.cal .dot.aud { background: #8d6e63; }
+.cal .dot.mtg { background: #607d8b; }
+.cal .dot.vis { background: #26a69a; }
+.cal-ev.aud { border-left-color: #8d6e63; background: #faf6f4; }
+.cal-ev.mtg { border-left-color: #607d8b; background: #f6f8fa; }
+.cal-ev.vis { border-left-color: #26a69a; background: #f2fbfa; }
 .cal-ev.trip { border-left-color: #c0ca33; background: #fbfcef; }
 .cal-ev.trn { border-left-color: #e67c73; background: #fdf6f5; }
 .cal-ev .cc.cat { display: inline-block; font-size: 11px; vertical-align: 2px; }

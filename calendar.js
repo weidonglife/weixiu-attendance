@@ -6,7 +6,8 @@
 import {
   db, esc, todayStr, addDays, weekdayOf, toHolidayMap, isOffDay, offDayLabel, isMakeupDay, closureOf,
   leaveDaySegments, LEAVE_LABEL, COMPANY_LIST
-} from "./common.js?v=26";
+  , EVENT_CATS
+} from "./common.js?v=27";
 import { lunarOf } from "./lunar.js?v=1";
 import {
   collection, query, where, onSnapshot, doc, getDoc, addDoc, updateDoc, deleteDoc, serverTimestamp
@@ -14,7 +15,7 @@ import {
 
 const WK = ["日", "一", "二", "三", "四", "五", "六"];
 // 活動類別：一般（紫）、行程（綠藍）、訓練（橘黃）
-const CAT = { "": ["一般", "ev"], trip: ["行程", "trip"], training: ["訓練", "trn"] };
+const CAT = EVENT_CATS;
 const catOf = e => CAT[e.category || ""] || CAT[""];
 const hh = n => `${String(n).padStart(2, "0")}:00`;
 const ymdNum = s => Number(s.replace(/-/g, ""));
@@ -47,7 +48,7 @@ export function startCalendar(root, opts = {}) {
       <select data-c="company" aria-label="公司"><option value="">全部公司</option>${COMPANY_LIST.map(c => `<option>${esc(c)}</option>`).join("")}</select>
       <select data-c="cat" aria-label="活動類別"><option value="*">全部活動</option>${Object.entries(CAT).map(([k, [n]]) => `<option value="${k}">${n}</option>`).join("")}<option value="none">不顯示活動</option></select>
     </div>
-    <div class="cal-legend"><span class="cc ev">一般活動</span><span class="cc trip">行程</span><span class="cc trn">訓練</span><span class="cc ok">請假${full ? "（已核准）" : ""}</span>${full ? `<span class="cc pend">審核中</span>` : ""}<span class="cc shift">兼職預告</span><span class="cal-hol-l">紅字＝放假</span></div>
+    <div class="cal-legend">${Object.values(CAT).map(([n, c]) => `<span class="cc ${c}">${n}</span>`).join("")}<span class="cc ok">請假${full ? "（已核准）" : ""}</span>${full ? `<span class="cc pend">審核中</span>` : ""}<span class="cc shift">兼職預告</span><span class="cal-hol-l">紅字＝放假</span></div>
     <div class="cal-grid" data-c="grid"></div>
     <div class="cal-form hidden" data-c="form"></div>
     <div class="cal-day" data-c="day"></div>
@@ -127,7 +128,7 @@ export function startCalendar(root, opts = {}) {
   function cnt(day) {
     const ok = day.lv.filter(x => x.r.status === "approved").length, pd = day.lv.length - ok;
     const ec = c => day.ev.filter(e => catOf(e)[1] === c).length;
-    return [[ok, "lv"], [pd, "pd"], [ec("trip"), "trip"], [ec("trn"), "trn"], [ec("ev"), "ev"], [day.sh.length, "sh"]]
+    return [[ok, "lv"], [pd, "pd"], ...Object.values(CAT).map(([, c]) => [ec(c), c]), [day.sh.length, "sh"]]
       .filter(([n]) => n).map(([n, c]) => `<span><i class="dot ${c}"></i>${n}</span>`).join(" ");
   }
 

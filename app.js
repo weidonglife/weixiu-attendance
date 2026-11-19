@@ -9,11 +9,11 @@ import {
   reqTitle, reqWhen, reqSortKey, leaveOverlaps, fmtDateStr
   , isPart, notify, callNotify, NOTIFY_URL, LINE_OA_ID, addDays, closureWins
   , normApproval, topRole, routeOf, afterSupervisor, canFinal, finalApprover, routeMsg, stageText, reviewNotes,
-  approvedByText, TOP_LABEL, PENDING, leaveListOf, LL_DAYS, LEAVE_LABEL, timelineHtml
-} from "./common.js?v=26";
+  approvedByText, TOP_LABEL, PENDING, leaveListOf, LL_DAYS, LEAVE_LABEL, timelineHtml, EVENT_CATS
+} from "./common.js?v=27";
 import { onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { startBoard } from "./board.js?v=28";
-import { startCalendar } from "./calendar.js?v=13";
+import { startBoard } from "./board.js?v=29";
+import { startCalendar } from "./calendar.js?v=14";
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot,
   writeBatch, Timestamp
@@ -235,7 +235,7 @@ async function initMain() {
 }
 
 // ===== 「公司活動」分頁：今天、明天、接下來一週 =====
-const EV_CAT = { trip: ["行程", "trip"], training: ["訓練", "trn"] };
+const EV_CAT = EVENT_CATS;
 async function loadUpcomingEvents() {
   try {
     const t = todayStr(), t1 = addDays(t, 1), last = addDays(t, 8);
@@ -247,10 +247,10 @@ async function loadUpcomingEvents() {
       const a = day(d);
       return `<div class="ev-day"><div class="ev-h">${label} <span class="muted">${esc(fmtDateStr(d))}</span></div>${a.length
         ? a.map(e => {
-            const c = EV_CAT[e.category] || ["", "ev"];
+            const c = EV_CAT[e.category || ""] || EV_CAT[""];
             const when = e.allDay || e.startDate !== d && e.endDate !== d ? "整天" : `${e.startDate === d ? esc(e.startTime) : ""}–${e.endDate === d ? esc(e.endTime) : ""}`;
             const pp = (e.people || []).map(p => p.n).filter(Boolean), mine = (e.people || []).some(p => p.e === me.empId);
-            return `<div class="ev-it${mine ? " mine" : ""}"><span class="cc ${c[1]}">${c[0] || "活動"}</span><span class="ev-w">${when}</span><span>${mine ? "⭐ " : ""}${e.company ? `［${esc(e.company)}］` : ""}${esc(e.title)}${e.location ? `<span class="muted">＠${esc(e.location)}</span>` : ""}${pp.length ? `<span class="ev-pp">👥 ${esc(pp.join("、"))}</span>` : ""}</span></div>`;
+            return `<div class="ev-it${mine ? " mine" : ""}"><span class="cc ${c[1]}">${c[0]}</span><span class="ev-w">${when}</span><span>${mine ? "⭐ " : ""}${e.company ? `［${esc(e.company)}］` : ""}${esc(e.title)}${e.location ? `<span class="muted">＠${esc(e.location)}</span>` : ""}${pp.length ? `<span class="ev-pp">👥 ${esc(pp.join("、"))}</span>` : ""}</span></div>`;
           }).join("")
         : '<div class="muted small">沒有活動</div>'}</div>`;
     };

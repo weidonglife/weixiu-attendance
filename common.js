@@ -27,6 +27,12 @@ export const db = getFirestore(app);
 // 公司名稱清單（新增員工時從這裡選；看板也依這個順序分組）
 export const COMPANIES = { W: "唯修科技", C: "傳創機電", S: "唯校中心" };
 export const COMPANY_LIST = Object.values(COMPANIES);
+
+// 公司活動類別：[名稱, CSS 樣式]（順序＝選單順序；"" 是「一般」）
+export const EVENT_CATS = {
+  trip: ["外勤行程", "trip"], training: ["教育訓練", "trn"], audit: ["稽核", "aud"],
+  meeting: ["會議", "mtg"], visit: ["客戶來訪", "vis"], "": ["一般", "ev"]
+};
 export const WORK = { start: "08:00", lateAfter: "08:10", end: "17:00" };
 export const DEFAULT_RADIUS = 200; // 公尺
 // 員工身分：full 正職、part 兼職（時間不固定，只記工時）。舊資料沒有這個欄位＝正職
