@@ -340,3 +340,6 @@ header.top .who:empty + .lang-btn { margin-left: auto; }
   #tToday > .row #dayPick { max-width: none !important; flex: 1 1 0; min-width: 0; }
   #tToday > .row #btnReloadDay { flex: 0 0 auto; }
 }
+
+/* 兩欄並排（手機也維持兩欄） */
+.row.row2 > * { flex: 1 1 0; min-width: 0; }

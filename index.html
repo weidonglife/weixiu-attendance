@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=45">
+<link rel="stylesheet" href="style.css?v=46">
 <link rel="stylesheet" href="board.css?v=20">
 </head>
 <body>
@@ -194,16 +194,18 @@
 
     <div class="card">
       <h2>申請加班</h2>
-      <div class="row">
+      <div class="row row2">
         <div><label for="otDate">日期</label><input id="otDate" type="date"></div>
+        <div><label for="otComp">補償方式</label>
+          <select id="otComp">
+            <option value="pay">領加班費</option>
+            <option value="comp">換成補休</option>
+          </select></div>
+      </div>
+      <div class="row row2">
         <div><label for="otStart">開始時間</label><input id="otStart" type="time" step="1800"></div>
         <div><label for="otEnd">結束時間</label><input id="otEnd" type="time" step="1800"></div>
       </div>
-      <label for="otComp">補償方式</label>
-      <select id="otComp">
-        <option value="pay">領加班費</option>
-        <option value="comp">換成補休</option>
-      </select>
       <p id="otCalc" class="calc"></p>
       <label for="otReason">加班事由（必填）</label>
       <textarea id="otReason" placeholder="例如：趕修客戶急件 Agilent 3458A"></textarea>
