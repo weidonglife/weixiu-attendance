@@ -290,11 +290,13 @@ header.top .inner:has(.lang-btn) .who { margin-left: auto; }
   #mainTabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
   #mainTabs button { padding-left: 4px; padding-right: 4px; text-align: center; }
 }
-header.top .who { background: none; border: 0; color: #fff; padding: 4px 6px; min-height: 0; width: auto; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-radius: 10px; font-weight: 500; }
-header.top .who:empty { display: none; }
-header.top .who::after { content: "⚙"; font-size: 16px; opacity: .85; }
-header.top .who:hover, header.top .who.on { background: rgba(255,255,255,.14); }
+header.top button.who { background: none; border: 0; color: #fff; padding: 4px 6px; min-height: 0; width: auto; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border-radius: 10px; font-weight: 500; }
+header.top button.who:empty { display: none; }
+header.top button.who::after { content: "⚙"; font-size: 16px; opacity: .85; }
+header.top button.who:hover, header.top button.who.on { background: rgba(255,255,255,.14); }
 
 .line-warn { border: 2px solid #f0b429; background: #fff8e6; }
 .line-warn p { margin: 6px 0 10px; font-size: 14px; color: #6b4e00; }
 header.top .who:empty + .lang-btn { margin-left: auto; }
+
+.ed-pre { white-space: pre-wrap; background: #f4f7fa; border: 1px solid #dde5ee; border-radius: 8px; padding: 12px; font-family: inherit; font-size: 14px; line-height: 1.6; margin: 0 0 8px; }

@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=40">
+<link rel="stylesheet" href="style.css?v=42">
 </head>
 <body>
 <header class="top">
@@ -57,6 +57,21 @@
 
     <!-- 每日出勤 -->
     <section id="tCal" class="hidden">
+      <div class="card">
+        <h2>📣 傳送公司活動到 LINE 群組</h2>
+        <p class="muted small">每天 18:00 系統會自動發「明天的公司活動」。活動有新增或修改時，可以在這裡再傳一次（同一天最多手動傳 3 次）。</p>
+        <div class="row" style="align-items:flex-end;gap:8px;flex-wrap:wrap">
+          <div><label for="edDate">活動日期</label><input type="date" id="edDate"></div>
+          <button type="button" class="secondary" id="btnEdPreview">預覽</button>
+        </div>
+        <div id="edBox" class="hidden" style="margin-top:12px">
+          <pre id="edText" class="ed-pre"></pre>
+          <p class="muted" id="edCost"></p>
+          <button type="button" id="btnEdSend">確定傳送到群組</button>
+        </div>
+        <div id="edMsg" class="msg hidden"></div>
+        <p class="muted small" id="edLog"></p>
+      </div>
       <div class="card"><div id="calRoot"></div></div>
       <div class="card">
         <h2>手機行事曆訂閱（每人專屬連結）</h2>
@@ -369,6 +384,6 @@
   </div>
 </div>
 
-<script type="module" src="admin.js?v=43"></script>
+<script type="module" src="admin.js?v=44"></script>
 </body>
 </html>

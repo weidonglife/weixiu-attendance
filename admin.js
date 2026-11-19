@@ -72,7 +72,7 @@ document.querySelectorAll(".tabs button[data-tab]").forEach(btn => {
     document.querySelectorAll(".tabs button[data-tab]").forEach(b => b.classList.toggle("on", b === btn));
     TABS.forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.tab));
     if (btn.dataset.tab === "tSettle") loadSettle();
-    if (btn.dataset.tab === "tCal" && !calStop) { calStop = startCalendar($("calRoot"), { me, full: true, admin: true }); loadCalLinksAdmin(); }
+    if (btn.dataset.tab === "tCal" && !calStop) { calStop = startCalendar($("calRoot"), { me, full: true, admin: true }); loadCalLinksAdmin(); edInit(); }
   };
 });
 
@@ -1255,4 +1255,45 @@ $("btnSaveOffice").onclick = async () => {
     officeCfg = { ...officeCfg, lat, lng, radius, goLive };
     showMsg($("oMsg"), "公司位置已儲存", "ok");
   } catch (e) { showMsg($("oMsg"), errMsg(e), "err"); }
+};
+
+// ===== 手動傳送公司活動到 LINE 群組 =====
+function edLogText(log) {
+  if (!log || !log.length) return "";
+  const f = x => { const d = new Date(x.at); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")} ${x.by}（${x.date.slice(5).replace("-", "/")} 的活動）`; };
+  return "最近手動傳送：" + log.slice(0, 3).map(f).join("；");
+}
+function edInit() {
+  if (!$("edDate").value) {
+    const t = new Date(Date.now() + 8 * 3600000 + 86400000);   // 台灣時間的明天
+    $("edDate").value = t.toISOString().slice(0, 10);
+  }
+  $("edDate").onchange = () => $("edBox").classList.add("hidden");
+}
+$("btnEdPreview").onclick = async () => {
+  hideMsg($("edMsg")); $("edBox").classList.add("hidden");
+  const date = $("edDate").value;
+  if (!date) return showMsg($("edMsg"), "請選擇日期", "err");
+  $("btnEdPreview").disabled = true;
+  try {
+    const r = await callNotify("eventDigest", { date, dryRun: true });
+    $("edLog").textContent = edLogText(r.log);
+    if (!r.text) { showMsg($("edMsg"), "這一天沒有公司活動，不用傳送", "err"); return; }
+    $("edText").textContent = r.text;
+    $("edCost").textContent = `群組目前 ${r.members ?? "?"} 人，傳送一次會用掉約 ${r.members ?? "?"} 則 LINE 訊息額度（LINE 依群組人數計算）。今天已手動傳送 ${r.usedToday} 次，最多 ${r.max} 次。`;
+    $("btnEdSend").disabled = r.usedToday >= r.max;
+    $("edBox").classList.remove("hidden");
+  } catch (e) { showMsg($("edMsg"), e.message, "err"); }
+  finally { $("btnEdPreview").disabled = false; }
+};
+$("btnEdSend").onclick = async () => {
+  if (!confirm("確定要把這則公告傳到公司 LINE 群組？")) return;
+  hideMsg($("edMsg"));
+  $("btnEdSend").disabled = true;
+  try {
+    const r = await callNotify("eventDigest", { date: $("edDate").value, dryRun: false });
+    $("edBox").classList.add("hidden");
+    $("edLog").textContent = edLogText(r.log);
+    showMsg($("edMsg"), `已傳送到公司群組（今天第 ${r.usedToday} 次）`, "ok");
+  } catch (e) { showMsg($("edMsg"), e.message, "err"); $("btnEdSend").disabled = false; }
 };
