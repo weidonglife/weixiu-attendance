@@ -362,5 +362,22 @@ header.top .who:empty + .lang-btn { margin-left: auto; }
   .ct-tbl .c-a, .ct-tbl .c-b, .ct-tbl .c-c { flex: 1 1 0; }
 }
 
+/* 異常清單：依員工分組 */
+.ano-tbl tr.ano-grp td { background: #f2f6fa; cursor: pointer; padding-top: 10px; padding-bottom: 10px; }
+.ano-tbl tr.ano-grp .empno { margin-right: 6px; }
+.ano-tbl .ano-arrow { display: inline-block; width: 16px; color: #6b7a8c; transition: transform .15s; }
+.ano-tbl tr.ano-grp.shut .ano-arrow { transform: rotate(-90deg); }
+.ano-tbl .ano-chips { margin-left: 8px; }
+.ano-tbl .ano-chips .tag { margin: 2px 2px 2px 0; }
+.ano-tbl .c-date, .ano-tbl .c-t { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ano-tbl .ano-days { margin-top: 4px; line-height: 1.6; }
+.ano-tbl .ano-days .nw { white-space: nowrap; }
+.ano-tbl td .tag { margin: 1px 2px 1px 0; }
+@media (max-width: 699px) {
+  .ano-tbl { font-size: 14px; }
+  .ano-tbl th, .ano-tbl td { padding-left: 4px; padding-right: 4px; }
+  .ano-tbl .ano-chips { display: block; margin: 4px 0 0 16px; }
+}
+
 /* 兩欄並排（手機也維持兩欄） */
 .row.row2 > * { flex: 1 1 0; min-width: 0; }

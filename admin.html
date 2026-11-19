@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=48">
+<link rel="stylesheet" href="style.css?v=49">
 </head>
 <body>
 <header class="top">
@@ -129,9 +129,10 @@
 
       <div class="card">
         <h2>異常清單 <span id="anoCount" class="muted"></span></h2>
+        <p class="muted small" style="margin-top:-6px">依員工分組，點姓名可收合。</p>
         <div class="table-scroll">
-          <table>
-            <thead><tr><th>日期</th><th>員工</th><th>上班</th><th>下班</th><th>異常</th></tr></thead>
+          <table class="ano-tbl">
+            <thead><tr><th>日期</th><th>上班</th><th>下班</th><th>異常</th></tr></thead>
             <tbody id="anoBody"></tbody>
           </table>
         </div>
@@ -387,6 +388,6 @@
   </div>
 </div>
 
-<script type="module" src="admin.js?v=46"></script>
+<script type="module" src="admin.js?v=47"></script>
 </body>
 </html>

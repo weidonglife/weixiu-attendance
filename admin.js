@@ -267,10 +267,7 @@ async function loadReport() {
     }).join("") || `<tr><td colspan="14" class="muted">沒有資料</td></tr>`;
 
     $("anoCount").textContent = R.anomalies.length ? `（${R.anomalies.length} 筆）` : "";
-    $("anoBody").innerHTML = R.anomalies.map(a => `<tr>
-        <td>${esc(a.date.slice(5))}（${a.weekday}）</td><td><span class="empno">${esc(a.empId)}</span>${esc(a.name)}</td>
-        <td>${a.firstIn || "—"}</td><td>${a.lastOut || "—"}</td><td>${tagsHtml(a.issues.map(i => [i.startsWith("遲到") || i.startsWith("早退") ? "late" : "warn", i]))}</td></tr>`).join("")
-      || `<tr><td colspan="5" class="muted">本月沒有異常 👍</td></tr>`;
+    $("anoBody").innerHTML = anomalyHtml(R.anomalies) || `<tr><td colspan="4" class="muted">本月沒有異常 👍</td></tr>`;
 
     $("balBody").innerHTML = bal.map(b => {
       const warn = b.daysLeft != null && b.daysLeft <= 60 && b.annualLeft > 0;
@@ -284,6 +281,46 @@ async function loadReport() {
     body.innerHTML = `<tr><td colspan="14">${esc(errMsg(e))}</td></tr>`;
   }
 }
+
+// 異常清單：依員工分組；整天未打卡的日子合併成一列（列出每一天）
+const issueKind = i => i.startsWith("遲到") || i.startsWith("早退") ? "late" : "warn";
+function anomalyHtml(list) {
+  const groups = [];
+  list.forEach(a => {
+    let g = groups[groups.length - 1];
+    if (!g || g.empId !== a.empId) groups.push(g = { empId: a.empId, name: a.name, rows: [] });
+    g.rows.push(a);
+  });
+  return groups.map((g, gi) => {
+    const absent = g.rows.filter(a => a.issues.length === 1 && a.issues[0] === "整天未打卡");
+    const cnt = { 遲到: 0, 早退: 0, 漏打卡: 0, 未打卡: 0 };
+    g.rows.forEach(a => a.issues.forEach(i => {
+      if (i.startsWith("遲到")) cnt.遲到++; else if (i.startsWith("早退")) cnt.早退++;
+      else if (i === "整天未打卡") cnt.未打卡++; else cnt.漏打卡++;
+    }));
+    const chips = [["遲到", "late"], ["早退", "late"], ["漏打卡", "warn"], ["未打卡", "warn"]]
+      .filter(([k]) => cnt[k]).map(([k, c]) => `<span class="tag ${c}">${k === "未打卡" ? "整天未打卡" : k} ${cnt[k]}${k === "未打卡" ? " 天" : " 次"}</span>`).join(" ");
+    const one = a => `<tr class="ano-row" data-g="${gi}"><td class="c-date">${esc(a.date.slice(5))}（${a.weekday}）</td>
+        <td class="c-t">${a.firstIn || "—"}</td><td class="c-t">${a.lastOut || "—"}</td><td>${tagsHtml(a.issues.map(i => [issueKind(i), i]))}</td></tr>`;
+    let body = "", absentDone = false;
+    g.rows.forEach(a => {
+      if (absent.length >= 2 && absent.includes(a)) {
+        if (absentDone) return;
+        absentDone = true;
+        body += `<tr class="ano-row" data-g="${gi}"><td class="c-date">共 ${absent.length} 天</td><td colspan="3"><span class="tag warn">整天未打卡</span>
+          <div class="small muted ano-days">${absent.map(x => `<span class="nw">${esc(x.date.slice(5))}（${x.weekday}）</span>`).join("、")}</div></td></tr>`;
+      } else body += one(a);
+    });
+    return `<tr class="ano-grp" data-g="${gi}"><td colspan="4"><span class="ano-arrow">▾</span><span class="empno">${esc(g.empId)}</span><b>${esc(g.name)}</b>
+        <span class="ano-chips">${chips}</span></td></tr>${body}`;
+  }).join("");
+}
+$("anoBody").addEventListener("click", e => {
+  const h = e.target.closest("tr.ano-grp");
+  if (!h) return;
+  const shut = h.classList.toggle("shut");
+  $("anoBody").querySelectorAll(`tr.ano-row[data-g="${h.dataset.g}"]`).forEach(r => r.classList.toggle("hidden", shut));
+});
 
 // ----- Excel 匯出（使用 SheetJS，需要時才載入）-----
 let xlsxLoading = null;
