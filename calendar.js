@@ -54,6 +54,13 @@ export function startCalendar(root, opts = {}) {
   </div>`;
   const $c = k => root.querySelector(`[data-c="${k}"]`);
 
+  // 員工名單（活動「人員」用）
+  let dirList = [];
+  getDoc(doc(db, "settings", "directory"))
+    .then(s => { dirList = (s.exists() ? s.data().list || [] : []).filter(x => x.empId && x.name); })
+    .catch(() => {});
+  const peopleText = e => (e.people || []).map(p => p.n).filter(Boolean).join("、");
+
   getDoc(doc(db, "settings", "holidays"))
     .then(s => { holidays = toHolidayMap(s.exists() ? s.data().list : []); render(); })
     .catch(() => {});
@@ -171,6 +178,7 @@ export function startCalendar(root, opts = {}) {
     h += day.ev.length ? day.ev.map(e => `<div class="cal-ev ${catOf(e)[1]}">
         <div class="t"><span class="cc ${catOf(e)[1]} cat">${catOf(e)[0]}</span> <b>${esc(e.title)}</b>${e.company ? ` <span class="tag gray">${esc(e.company)}</span>` : ""}</div>
         <div class="meta">${e.startDate === e.endDate ? "" : `${esc(e.startDate.slice(5))} ～ ${esc(e.endDate.slice(5))}　`}${evTime(e)}${e.location ? `　📍 ${esc(e.location)}` : ""}</div>
+        ${(e.people || []).length ? `<div class="meta">👥 ${esc(peopleText(e))}</div>` : ""}
         ${e.note ? `<div class="meta">${esc(e.note)}</div>` : ""}
         <div class="meta muted">建立：${esc(e.createdByName || e.createdBy || "")}</div>
         ${canEdit(e) ? `<div class="acts"><button type="button" class="small secondary" data-edit="${e.id}">修改</button>
@@ -211,6 +219,16 @@ export function startCalendar(root, opts = {}) {
       <label>地點（選填）</label><input data-f="location" maxlength="60" value="${esc(v.location)}">
       <label>說明（選填）</label><textarea data-f="note" maxlength="300" rows="2">${esc(v.note)}</textarea>
       <label>類別</label><select data-f="category">${Object.entries(CAT).map(([k, [n]]) => `<option value="${k}"${k === (v.category || "") ? " selected" : ""}>${n}</option>`).join("")}</select>
+      <label>人員（選填，可複選）</label>
+      <div class="pp" data-f="people">${(() => {
+        const on = new Set((v.people || []).map(p => p.e));
+        const known = new Set(dirList.map(x => x.empId));
+        const extra = (v.people || []).filter(p => !known.has(p.e));   // 已離職或不在名單的人，保留原本的選擇
+        const groups = [...COMPANY_LIST, ""].map(c => [c, dirList.filter(x => (x.company || "") === c || (!c && !COMPANY_LIST.includes(x.company)))]).filter(([, l]) => l.length);
+        return groups.map(([c, l]) => `<div class="pp-g"><span class="pp-c">${esc(c || "其他")}</span>${l.map(x => `<button type="button" class="pp-b${on.has(x.empId) ? " on" : ""}" data-e="${esc(x.empId)}" data-n="${esc(x.name)}">${esc(x.name)}</button>`).join("")}</div>`).join("")
+          + (extra.length ? `<div class="pp-g"><span class="pp-c">其他</span>${extra.map(p => `<button type="button" class="pp-b on" data-e="${esc(p.e)}" data-n="${esc(p.n)}">${esc(p.n)}</button>`).join("")}</div>` : "")
+          || '<span class="muted small">讀不到員工名單</span>';
+      })()}</div>
       <label>對象</label><select data-f="company"><option value="">全體同仁</option>${COMPANY_LIST.map(c => `<option${c === v.company ? " selected" : ""}>${esc(c)}</option>`).join("")}</select>
       <div class="acts" style="margin-top:12px">
         <button type="button" data-c="save">${editing.id ? "儲存修改" : "新增活動"}</button>
@@ -218,6 +236,7 @@ export function startCalendar(root, opts = {}) {
       </div>
       <div class="msg hidden" data-c="fmsg"></div>`;
     f.classList.remove("hidden");
+    f.querySelector('[data-f="people"]').onclick = ev => { const b = ev.target.closest(".pp-b"); if (b) b.classList.toggle("on"); };
     f.querySelector('[data-f="allDay"]').onchange = ev => { f.querySelector('[data-f="times"]').style.display = ev.target.checked ? "none" : ""; };
     f.querySelector('[data-f="title"]').focus();
     f.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -230,7 +249,8 @@ export function startCalendar(root, opts = {}) {
     const d = {
       title: g("title").value.trim(), startDate: g("startDate").value, endDate: g("endDate").value || g("startDate").value,
       allDay: g("allDay").checked, startTime: null, endTime: null,
-      location: g("location").value.trim(), note: g("note").value.trim(), company: g("company").value, category: g("category").value
+      location: g("location").value.trim(), note: g("note").value.trim(), company: g("company").value, category: g("category").value,
+      people: [...f.querySelectorAll('[data-f="people"] .pp-b.on')].map(b => ({ e: b.dataset.e, n: b.dataset.n })).slice(0, 40)
     };
     if (!d.allDay) { d.startTime = g("startTime").value; d.endTime = g("endTime").value; }
     if (!d.title) return fmsg("請輸入活動名稱", "err");

@@ -13,7 +13,7 @@ import {
 } from "./common.js?v=26";
 import { onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { startBoard } from "./board.js?v=28";
-import { startCalendar } from "./calendar.js?v=12";
+import { startCalendar } from "./calendar.js?v=13";
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot,
   writeBatch, Timestamp
@@ -249,7 +249,8 @@ async function loadUpcomingEvents() {
         ? a.map(e => {
             const c = EV_CAT[e.category] || ["", "ev"];
             const when = e.allDay || e.startDate !== d && e.endDate !== d ? "整天" : `${e.startDate === d ? esc(e.startTime) : ""}–${e.endDate === d ? esc(e.endTime) : ""}`;
-            return `<div class="ev-it"><span class="cc ${c[1]}">${c[0] || "活動"}</span><span class="ev-w">${when}</span><span>${e.company ? `［${esc(e.company)}］` : ""}${esc(e.title)}${e.location ? `<span class="muted">＠${esc(e.location)}</span>` : ""}</span></div>`;
+            const pp = (e.people || []).map(p => p.n).filter(Boolean), mine = (e.people || []).some(p => p.e === me.empId);
+            return `<div class="ev-it${mine ? " mine" : ""}"><span class="cc ${c[1]}">${c[0] || "活動"}</span><span class="ev-w">${when}</span><span>${mine ? "⭐ " : ""}${e.company ? `［${esc(e.company)}］` : ""}${esc(e.title)}${e.location ? `<span class="muted">＠${esc(e.location)}</span>` : ""}${pp.length ? `<span class="ev-pp">👥 ${esc(pp.join("、"))}</span>` : ""}</span></div>`;
           }).join("")
         : '<div class="muted small">沒有活動</div>'}</div>`;
     };

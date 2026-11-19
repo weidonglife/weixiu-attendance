@@ -9,7 +9,7 @@ import {
   isPart, EMP_TYPE_LABEL, closureWins, closureOf, closureText, notify, callNotify, NOTIFY_URL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY,
   normApproval, topRole, TOP_LABEL, PENDING, stageText, reviewNotes, approvedByText, leaveListOf, LL_KEYS, LL_DAYS, addDays, timelineHtml, annualPeriodInfo, compLots, compPayDeadline
 } from "./common.js?v=26";
-import { startCalendar } from "./calendar.js?v=12";
+import { startCalendar } from "./calendar.js?v=13";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut

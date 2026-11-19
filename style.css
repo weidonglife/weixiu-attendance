@@ -102,9 +102,17 @@ span.small, div.small { font-size: 12px; }
 /* 打卡頁：公司活動 */
 .ev-day + .ev-day { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .ev-h { font-weight: 600; margin-bottom: 6px; }
+/* 活動「人員」選擇 */
+.pp { display: flex; flex-direction: column; gap: 6px; margin-bottom: 4px; }
+.pp-g { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pp-c { font-size: 12px; color: var(--muted); min-width: 60px; }
+.pp-b { font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: #fff; color: var(--text, #222); }
+.pp-b.on { background: var(--primary); border-color: var(--primary); color: #fff; }
 .ev-sub { font-size: 15px; margin: 16px 0 4px; padding-top: 10px; border-top: 2px solid var(--line); }
 .ev-it { display: flex; gap: 8px; align-items: baseline; font-size: 14px; padding: 3px 0; }
 .ev-it .cc { flex: 0 0 auto; display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 4px; }
+.ev-it .ev-pp { display: block; font-size: 12px; color: var(--muted); }
+.ev-it.mine { font-weight: 600; }
 .ev-it .ev-w { flex: 0 0 auto; color: var(--muted); font-size: 13px; min-width: 76px; }
 button.block { width: 100%; margin-top: 14px; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; }
