@@ -240,7 +240,8 @@ footer.note { text-align: center; color: var(--muted); font-size: 12px; padding:
 }
 
 /* ===== 我的設定 ===== */
-.me-info { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px 16px; }
+.me-info { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 14px; }
+.me-info b { overflow-wrap: anywhere; }
 .me-info div { display: flex; flex-direction: column; gap: 2px; font-size: 15px; }
 .me-info .muted { font-size: 12px; }
 .cc.ev { background: #efe8fb; color: #6a3fb5; }
