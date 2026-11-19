@@ -286,7 +286,7 @@ export function startBoard(root, { big = false } = {}) {
           // 上班／外勤：打卡時間跟狀態放同一行（例如「上班 10:33」），下一行留給請假或客戶名稱
           const timeAfter = (s.st === "in" || s.st === "field") && tIn ? ` ${tIn}` : "";
           if (s.st === "in") detail = leaveTag ? leaveTag[1] : "";
-          else if (s.st === "field") detail = esc(pr.customer || "");
+          else if (s.st === "field") detail = pr.customer ? `<span translate="no">${esc(pr.customer)}</span>` : "";
           else if (s.st === "off") detail = `${tIn}–${tOut}`;
           else if (s.idle) detail = "時間不固定";
           else if (s.expected) detail = `${esc(s.shift.start)}–${esc(s.shift.end)}`;
@@ -295,7 +295,7 @@ export function startBoard(root, { big = false } = {}) {
           return `<div class="plate p-${cls}${late ? " is-late" : ""}${changed ? " pop" : ""}" title="${esc(p.name)} ${label}">
             <span class="co ${COMPANY_CLASS[co] || ""}" aria-hidden="true"></span>
             <span class="led" aria-hidden="true"></span>
-            <div class="pn${/[\u3400-\u9fff]/.test(p.name) ? "" : " pn-en"}">${esc(p.name)}</div>
+            <div class="pn${/[\u3400-\u9fff]/.test(p.name) ? "" : " pn-en"}" translate="no">${esc(p.name)}</div>
             <div class="pid">${esc(p.empId)}${p.empType === "part" ? "・兼職" : ""}</div>
             <div class="pst">${label}${timeAfter}${late ? `<em>遲到</em>` : ""}</div>
             <div class="pdt">${detail || "&nbsp;"}</div>

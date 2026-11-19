@@ -277,3 +277,9 @@ td .tl { margin-top: 4px; padding: 4px 8px; font-size: 12px; }
 .cal-ev.trn { border-left-color: #e67c73; background: #fdf6f5; }
 .cal-ev .cc.cat { display: inline-block; font-size: 11px; vertical-align: 2px; }
 .cal-head [data-c="cat"] { width: auto; }
+
+/* 中英切換按鈕 */
+.lang-btn { white-space: nowrap; flex: none; margin-left: 10px; padding: 4px 10px; min-height: 0; font-size: 13px; font-weight: 600; border-radius: 999px; background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.35); width: auto; }
+.lang-btn:hover { background: rgba(255,255,255,.24); }
+header.top .inner:has(.lang-btn) { justify-content: flex-start; }
+header.top .inner:has(.lang-btn) .who { margin-left: auto; }

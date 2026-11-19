@@ -12,8 +12,9 @@ import {
   approvedByText, TOP_LABEL, PENDING, leaveListOf, LL_DAYS, LEAVE_LABEL, timelineHtml, EVENT_CATS
 } from "./common.js?v=27";
 import { onAuthStateChanged, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { startBoard } from "./board.js?v=29";
-import { startCalendar } from "./calendar.js?v=14";
+import { adoptUserLang, setLangSaver } from "./i18n.js?v=1";
+import { startBoard } from "./board.js?v=30";
+import { startCalendar } from "./calendar.js?v=15";
 import {
   doc, getDoc, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, getDocs, serverTimestamp, onSnapshot,
   writeBatch, Timestamp
@@ -45,7 +46,7 @@ setInterval(tick, 1000); tick();
 
 // ===== 登入狀態 =====
 onAuthStateChanged(auth, async user => {
-  if (!user) { me = null; stopReviewWatch(); $("who").textContent = ""; show("vLogin"); return; }
+  if (!user) { setLangSaver(null); me = null; stopReviewWatch(); $("who").textContent = ""; show("vLogin"); return; }
   show("vLoading");
   try {
     const snap = await getDoc(doc(db, "users", user.uid));
@@ -53,6 +54,9 @@ onAuthStateChanged(auth, async user => {
       return blocked("帳號已停用", "這個帳號目前無法使用，請聯絡管理員。");
     }
     me = { uid: user.uid, ...snap.data() };
+    const saveLang = l => updateDoc(doc(db, "users", me.uid), { lang: l });
+    adoptUserLang(me.lang, saveLang);
+    setLangSaver(saveLang);
     $("who").textContent = `${me.name}（${me.empId}）`;
 
     if (me.mustChangePassword) { show("vChangePw"); return; }
@@ -249,7 +253,7 @@ async function loadUpcomingEvents() {
             const c = EV_CAT[e.category || ""] || EV_CAT[""];
             const when = e.allDay || e.startDate !== d && e.endDate !== d ? "整天" : `${e.startDate === d ? esc(e.startTime) : ""}–${e.endDate === d ? esc(e.endTime) : ""}`;
             const pp = (e.people || []).map(p => p.n).filter(Boolean), mine = (e.people || []).some(p => p.e === me.empId);
-            return `<div class="ev-it${mine ? " mine" : ""}"><span class="cc ${c[1]}">${c[0]}</span><span class="ev-w">${when}</span><span>${mine ? "⭐ " : ""}${e.company ? `［${esc(e.company)}］` : ""}${esc(e.title)}${e.location ? `<span class="muted">＠${esc(e.location)}</span>` : ""}${pp.length ? `<span class="ev-pp">👥 ${esc(pp.join("、"))}</span>` : ""}</span></div>`;
+            return `<div class="ev-it${mine ? " mine" : ""}"><span class="cc ${c[1]}">${c[0]}</span><span class="ev-w">${when}</span><span>${mine ? "⭐ " : ""}${e.company ? `［${esc(e.company)}］` : ""}<span translate="no">${esc(e.title)}</span>${e.location ? `<span class="muted">＠<span translate="no">${esc(e.location)}</span></span>` : ""}${pp.length ? `<span class="ev-pp">👥 <span translate="no">${esc(pp.join("、"))}</span></span>` : ""}</span></div>`;
           }).join("")
         : '<div class="muted small">沒有活動</div>'}</div>`;
     };
@@ -454,7 +458,7 @@ async function loadToday() {
       ? `<table><tbody>${list.map(p => `<tr>
           <td>${fmtTime(p.ts)}</td><td>${TYPE_LABEL[p.type]}</td>
           <td><span class="tag ${p.mode === "office" ? "ok" : p.mode === "field" ? "field" : "gray"}">${MODE_LABEL[p.mode]}</span></td>
-          <td class="muted">${p.mode === "field" ? esc(p.customer) : p.distance != null ? `距公司 ${p.distance} m` : ""}</td>
+          <td class="muted">${p.mode === "field" ? `<span translate="no">${esc(p.customer)}</span>` : p.distance != null ? `距公司 ${p.distance} m` : ""}</td>
         </tr>`).join("")}</tbody></table>`
       : "尚無紀錄";
   } catch (e) { $("todayList").textContent = errMsg(e); }
@@ -540,7 +544,7 @@ async function loadCorrections() {
       ? `<table><tbody>${list.map(c => `<tr>
           <td>${esc(c.date.slice(5))} ${esc(c.time)}</td><td>${TYPE_LABEL[c.type]}</td>
           <td>${tagsHtml([COR_STATUS[c.status] || ["gray", c.status]])}</td>
-          <td class="muted">${esc(c.reason)}</td></tr>`).join("")}</tbody></table>`
+          <td class="muted" translate="no">${esc(c.reason)}</td></tr>`).join("")}</tbody></table>`
       : "尚無申請";
   } catch (e) { $("corList").textContent = errMsg(e); }
 }

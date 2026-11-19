@@ -9,7 +9,7 @@ import {
   isPart, EMP_TYPE_LABEL, closureWins, closureOf, closureText, notify, callNotify, NOTIFY_URL, annualEntitlement, workMinutes, FULLTIME_YEAR_HOURS, addMonths, HOURS_PER_DAY,
   normApproval, topRole, TOP_LABEL, PENDING, stageText, reviewNotes, approvedByText, leaveListOf, LL_KEYS, LL_DAYS, addDays, timelineHtml, annualPeriodInfo, compLots, compPayDeadline
 } from "./common.js?v=27";
-import { startCalendar } from "./calendar.js?v=14";
+import { startCalendar } from "./calendar.js?v=15";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signOut
@@ -419,7 +419,7 @@ async function loadStaff() {
   $("staffBody").innerHTML = staff.map(s => `<tr>
       <td>${esc(s.empId)}</td><td>${esc(s.name)}</td><td>${esc(s.company)}</td>
       <td>${s.role === "admin" ? '<span class="tag field">管理員</span>' : "員工"}${topRole(approval, s.empId) ? ` <span class="tag ok">${TOP_LABEL[topRole(approval, s.empId)]}</span>` : ""}</td>
-      <td>${isPart(s) ? '<span class="tag gray">兼職</span>' : "正職"}</td>
+      <td>${isPart(s) ? '<span class="tag gray">兼職</span>' : "正職"}${s.lang === "en" ? ' <span class="tag field">EN</span>' : ""}</td>
       <td>${s.hireDate ? esc(s.hireDate) : '<span class="tag warn">未設定</span>'}</td>
       <td>${s.supervisorEmpId ? esc(staffName(s.supervisorEmpId)) : '<span class="muted">—</span>'}</td>
       <td>${s.deviceId ? '<span class="tag ok">已綁定</span>' : '<span class="tag gray">未綁定</span>'}</td>
@@ -464,6 +464,7 @@ function fillEdit() {
   $("eSup").innerHTML = supOptions(s.empId);
   $("eSup").value = s.supervisorEmpId || "";
   $("eType").value = isPart(s) ? "part" : "full";
+  $("eLang").value = s.lang === "en" ? "en" : "zh";
   $("ePartAnnual").value = s.partAnnualHours ?? "";
   const entP = annualEntitlement(s.hireDate, todayStr());
   $("ePreAnnual").value = entP && entP.start && s.preAnnualFrom === entP.start ? (s.preAnnualHours ?? "") : "";
@@ -535,7 +536,7 @@ $("btnEdit").onclick = async () => {
       name, company: $("eCompany").value, role: $("eRole").value,
       hireDate: $("eHire").value || null,
       supervisorEmpId: $("eSup").value || null,
-      empType: $("eType").value,
+      empType: $("eType").value, lang: $("eLang").value,
       partAnnualHours: $("eType").value === "part" && $("ePartAnnual").value !== "" ? Math.max(0, Number($("ePartAnnual").value)) : null,
       ...preAnnualFields($("eHire").value || null, $("ePreAnnual").value)
     });
@@ -628,7 +629,7 @@ $("btnResetPw").onclick = async () => {
     batch.set(doc(db, "users", cred.user.uid), {
       empId: s.empId, name: s.name, company: s.company, role: s.role,
       hireDate: s.hireDate || null, supervisorEmpId: s.supervisorEmpId || null,
-      empType: s.empType || "full", partAnnualHours: s.partAnnualHours ?? null,
+      empType: s.empType || "full", partAnnualHours: s.partAnnualHours ?? null, lang: s.lang || "zh",
       preAnnualHours: s.preAnnualHours ?? null, preAnnualFrom: s.preAnnualFrom ?? null,
       active: true, deviceId: s.deviceId || null, mustChangePassword: true, createdAt: serverTimestamp()
     });

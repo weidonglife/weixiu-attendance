@@ -142,9 +142,9 @@ export function startCalendar(root, opts = {}) {
       const off = isOffDay(d, holidays), hol = holidays.has(d) ? holidays.get(d) : "", cl = closureOf(d, holidays);
       const cls = ["cd", d.slice(0, 7) !== ym ? "out" : "", off ? "off" : "", d === today ? "today" : "", d === sel ? "sel" : ""].filter(Boolean).join(" ");
       const chips = [
-        ...day.ev.map(e => `<span class="cc ${catOf(e)[1]}">${e.allDay ? "" : esc(e.startTime) + " "}${esc(e.title)}</span>`),
-        ...day.lv.map(x => `<span class="cc ${x.r.status === "approved" ? "ok" : "pend"}">${esc(x.r.name)}</span>`),
-        ...day.sh.map(s => `<span class="cc shift">${esc(s.name)}</span>`)
+        ...day.ev.map(e => `<span class="cc ${catOf(e)[1]}">${e.allDay ? "" : esc(e.startTime) + " "}<span translate="no">${esc(e.title)}</span></span>`),
+        ...day.lv.map(x => `<span class="cc ${x.r.status === "approved" ? "ok" : "pend"}"><span translate="no">${esc(x.r.name)}</span></span>`),
+        ...day.sh.map(s => `<span class="cc shift"><span translate="no">${esc(s.name)}</span></span>`)
       ];
       cells += `<button type="button" class="${cls}" data-d="${d}">
         <span class="dh"><span class="n">${Number(d.slice(8, 10))}</span>${lunarCell(d)}</span>
@@ -177,25 +177,25 @@ export function startCalendar(root, opts = {}) {
 
     h += `<h4>公司活動</h4>`;
     h += day.ev.length ? day.ev.map(e => `<div class="cal-ev ${catOf(e)[1]}">
-        <div class="t"><span class="cc ${catOf(e)[1]} cat">${catOf(e)[0]}</span> <b>${esc(e.title)}</b>${e.company ? ` <span class="tag gray">${esc(e.company)}</span>` : ""}</div>
-        <div class="meta">${e.startDate === e.endDate ? "" : `${esc(e.startDate.slice(5))} ～ ${esc(e.endDate.slice(5))}　`}${evTime(e)}${e.location ? `　📍 ${esc(e.location)}` : ""}</div>
-        ${(e.people || []).length ? `<div class="meta">👥 ${esc(peopleText(e))}</div>` : ""}
-        ${e.note ? `<div class="meta">${esc(e.note)}</div>` : ""}
-        <div class="meta muted">建立：${esc(e.createdByName || e.createdBy || "")}</div>
+        <div class="t"><span class="cc ${catOf(e)[1]} cat">${catOf(e)[0]}</span> <b translate="no">${esc(e.title)}</b>${e.company ? ` <span class="tag gray">${esc(e.company)}</span>` : ""}</div>
+        <div class="meta">${e.startDate === e.endDate ? "" : `${esc(e.startDate.slice(5))} ～ ${esc(e.endDate.slice(5))}　`}${evTime(e)}${e.location ? `　📍 <span translate="no">${esc(e.location)}</span>` : ""}</div>
+        ${(e.people || []).length ? `<div class="meta">👥 <span translate="no">${esc(peopleText(e))}</span></div>` : ""}
+        ${e.note ? `<div class="meta" translate="no">${esc(e.note)}</div>` : ""}
+        <div class="meta muted">建立：<span translate="no">${esc(e.createdByName || e.createdBy || "")}</span></div>
         ${canEdit(e) ? `<div class="acts"><button type="button" class="small secondary" data-edit="${e.id}">修改</button>
           <button type="button" class="small danger" data-del="${e.id}">${delArm === e.id ? "確定刪除？" : "刪除"}</button></div>` : ""}
       </div>`).join("") : `<p class="muted">沒有活動</p>`;
 
     h += `<h4>請假</h4>`;
     h += day.lv.length ? day.lv.map(({ r, seg }) => `<div class="cal-row">
-        <span><span class="empno">${esc(r.empId)}</span>${esc(r.name)}</span>
+        <span><span class="empno">${esc(r.empId)}</span><span translate="no">${esc(r.name)}</span></span>
         <span>${full ? esc(LEAVE_LABEL[r.leaveType] || r.leaveType || "請假") : "請假"}</span>
         <span>${hh(seg.s)}–${hh(seg.e)}</span>
         ${full ? `<span class="tag ${r.status === "approved" ? "ok" : "warn"}">${r.status === "approved" ? "已核准" : "審核中"}</span>` : "<span></span>"}
       </div>`).join("") : `<p class="muted">${isOffDay(d, holidays) ? "放假日" : "沒有人請假"}</p>`;
     if (day.sh.length) {
       h += `<h4>兼職上班預告</h4>` + day.sh.map(s => `<div class="cal-row">
-        <span><span class="empno">${esc(s.empId)}</span>${esc(s.name)}</span><span>兼職</span><span>${esc(s.start)}–${esc(s.end)}</span><span></span></div>`).join("");
+        <span><span class="empno">${esc(s.empId)}</span><span translate="no">${esc(s.name)}</span></span><span>兼職</span><span>${esc(s.start)}–${esc(s.end)}</span><span></span></div>`).join("");
     }
     $c("day").innerHTML = h;
   }
@@ -226,8 +226,8 @@ export function startCalendar(root, opts = {}) {
         const known = new Set(dirList.map(x => x.empId));
         const extra = (v.people || []).filter(p => !known.has(p.e));   // 已離職或不在名單的人，保留原本的選擇
         const groups = [...COMPANY_LIST, ""].map(c => [c, dirList.filter(x => (x.company || "") === c || (!c && !COMPANY_LIST.includes(x.company)))]).filter(([, l]) => l.length);
-        return groups.map(([c, l]) => `<div class="pp-g"><span class="pp-c">${esc(c || "其他")}</span>${l.map(x => `<button type="button" class="pp-b${on.has(x.empId) ? " on" : ""}" data-e="${esc(x.empId)}" data-n="${esc(x.name)}">${esc(x.name)}</button>`).join("")}</div>`).join("")
-          + (extra.length ? `<div class="pp-g"><span class="pp-c">其他</span>${extra.map(p => `<button type="button" class="pp-b on" data-e="${esc(p.e)}" data-n="${esc(p.n)}">${esc(p.n)}</button>`).join("")}</div>` : "")
+        return groups.map(([c, l]) => `<div class="pp-g"><span class="pp-c">${esc(c || "其他")}</span>${l.map(x => `<button type="button" class="pp-b${on.has(x.empId) ? " on" : ""}" data-e="${esc(x.empId)}" data-n="${esc(x.name)}" translate="no">${esc(x.name)}</button>`).join("")}</div>`).join("")
+          + (extra.length ? `<div class="pp-g"><span class="pp-c">其他</span>${extra.map(p => `<button type="button" class="pp-b on" data-e="${esc(p.e)}" data-n="${esc(p.n)}" translate="no">${esc(p.n)}</button>`).join("")}</div>` : "")
           || '<span class="muted small">讀不到員工名單</span>';
       })()}</div>
       <label>對象</label><select data-f="company"><option value="">全體同仁</option>${COMPANY_LIST.map(c => `<option${c === v.company ? " selected" : ""}>${esc(c)}</option>`).join("")}</select>
