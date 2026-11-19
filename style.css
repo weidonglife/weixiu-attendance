@@ -96,6 +96,7 @@ span.small, div.small { font-size: 12px; }
 /* 打卡頁：公司活動 */
 .ev-day + .ev-day { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .ev-h { font-weight: 600; margin-bottom: 6px; }
+.ev-sub { font-size: 15px; margin: 16px 0 4px; padding-top: 10px; border-top: 2px solid var(--line); }
 .ev-it { display: flex; gap: 8px; align-items: baseline; font-size: 14px; padding: 3px 0; }
 .ev-it .cc { flex: 0 0 auto; display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 4px; }
 .ev-it .ev-w { flex: 0 0 auto; color: var(--muted); font-size: 13px; min-width: 76px; }

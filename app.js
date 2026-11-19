@@ -206,7 +206,8 @@ $("btnMyPw").onclick = async () => {
 document.querySelectorAll("#mainTabs button[data-tab]").forEach(btn => {
   btn.onclick = () => {
     document.querySelectorAll("#mainTabs button[data-tab]").forEach(b => b.classList.toggle("on", b === btn));
-    ["pPunch", "pLeave", "pBoard", "pReview", "pCal", "pMe"].forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.tab));
+    ["pPunch", "pLeave", "pBoard", "pReview", "pCal", "pEv", "pMe"].forEach(id => $(id).classList.toggle("hidden", id !== btn.dataset.tab));
+    if (btn.dataset.tab === "pEv") loadUpcomingEvents();
     if (btn.dataset.tab === "pMe") renderMe();
     if (btn.dataset.tab === "pCal" && !calStop) openCalendar();
     if (btn.dataset.tab === "pBoard" && !boardStop) boardStop = startBoard($("boardRoot"));
@@ -231,16 +232,15 @@ async function initMain() {
   loadLine();
   initShifts();
   loadAgents();
-  loadUpcomingEvents();
 }
 
-// ===== 打卡頁：今天、明天的公司活動 =====
+// ===== 「公司活動」分頁：今天、明天、接下來一週 =====
 const EV_CAT = { trip: ["行程", "trip"], training: ["訓練", "trn"] };
 async function loadUpcomingEvents() {
   try {
-    const t = todayStr(), t1 = addDays(t, 1);
+    const t = todayStr(), t1 = addDays(t, 1), last = addDays(t, 8);
     const snap = await getDocs(query(collection(db, "events"), where("endDate", ">=", t)));
-    const evs = snap.docs.map(d => d.data()).filter(e => e.startDate <= t1);
+    const evs = snap.docs.map(d => d.data()).filter(e => e.startDate <= last);
     const day = d => evs.filter(e => e.startDate <= d && e.endDate >= d)
       .sort((a, b) => (a.allDay ? "" : a.startTime).localeCompare(b.allDay ? "" : b.startTime));
     const list = (d, label) => {
@@ -253,9 +253,12 @@ async function loadUpcomingEvents() {
           }).join("")
         : '<div class="muted small">沒有活動</div>'}</div>`;
     };
-    $("evBody").innerHTML = list(t, "今天") + list(t1, "明天");
-    $("evCard").classList.toggle("hidden", !evs.length);
-  } catch (e) { console.warn("events", e); $("evCard").classList.add("hidden"); }
+    let h = list(t, "今天") + list(t1, "明天");
+    const later = [];
+    for (let d = addDays(t, 2); d <= last; d = addDays(d, 1)) if (day(d).length) later.push(d);
+    h += later.length ? `<h3 class="ev-sub">接下來一週</h3>` + later.map(d => list(d, "")).join("") : "";
+    $("evBody").innerHTML = h;
+  } catch (e) { console.warn("events", e); $("evBody").innerHTML = `<p class="muted">${esc(errMsg(e))}</p>`; }
 }
 
 // ===== 兼職：上班預告 =====
