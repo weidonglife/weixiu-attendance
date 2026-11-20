@@ -51,6 +51,7 @@ onAuthStateChanged(auth, async user => {
     loadReport();
     loadRecords();
     watchPending();
+    loadQuota();
   } catch (e) { show("vDenied"); }
 });
 
@@ -1301,6 +1302,28 @@ function edLogText(log) {
   const f = x => { const d = new Date(x.at); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")} ${x.by}（${x.date.slice(5).replace("-", "/")} 的活動）`; };
   return "最近手動傳送：" + log.slice(0, 3).map(f).join("；");
 }
+// ===== LINE 本月訊息額度（免費方案 200 則；群組推播＝人數則）=====
+let lastQuota = null;
+async function loadQuota() {
+  if (!NOTIFY_URL) return;
+  const el = $("lqBar");
+  try {
+    const q = lastQuota = await callNotify("lineQuota");
+    if (q.used == null) return;
+    if (q.limit == null) {
+      el.className = "lq-bar ok";
+      el.innerHTML = `<div class="lq-top"><span>📨 LINE 本月已用</span><span><b>${q.used}</b> 則</span></div>`;
+      return;
+    }
+    const left = Math.max(0, q.limit - q.used), pct = Math.min(100, Math.round(q.used / q.limit * 100));
+    const lv = left <= q.reserve ? "bad" : pct >= 60 ? "warn" : "ok";
+    el.className = "lq-bar " + lv;
+    el.innerHTML = `<div class="lq-top"><span>📨 LINE 本月訊息額度</span><span><b>${q.used}</b>／${q.limit} 則・剩 <b>${left}</b> 則</span></div>
+      <div class="lq-meter"><i style="width:${pct}%"></i></div>
+      ${lv === "bad" ? `<div class="small lq-note">額度快用完了：明日出勤預告、群組活動公告、審核提醒先暫停，剩下的 ${left} 則留給簽核通知。每月 1 日重新計算。</div>` : ""}
+      ${(q.log || []).length ? `<details class="small lq-log"><summary>因額度不足而沒發的通知（${q.log.length}）</summary>${q.log.map(x => `<div>${esc(fmtTs(x.at).slice(5))}　${esc(x.what)}</div>`).join("")}</details>` : ""}`;
+  } catch (e) { el.className = "lq-bar hidden"; }
+}
 function edInit() {
   if (!$("edDate").value) {
     const t = new Date(Date.now() + 8 * 3600000 + 86400000);   // 台灣時間的明天
@@ -1318,7 +1341,10 @@ $("btnEdPreview").onclick = async () => {
     $("edLog").textContent = edLogText(r.log);
     if (!r.text) { showMsg($("edMsg"), "這一天沒有公司活動，不用傳送", "err"); return; }
     $("edText").textContent = r.text;
-    $("edCost").textContent = `群組目前 ${r.members ?? "?"} 人，傳送一次會用掉約 ${r.members ?? "?"} 則 LINE 訊息額度（LINE 依群組人數計算）。今天已手動傳送 ${r.usedToday} 次，最多 ${r.max} 次。`;
+    const q = r.quota || {};
+    $("edCost").textContent = `群組目前 ${r.members ?? "?"} 人，傳送一次會用掉約 ${r.members ?? "?"} 則 LINE 訊息額度（LINE 依群組人數計算）。`
+      + (q.limit != null && q.used != null ? `本月已用 ${q.used}／${q.limit} 則，傳送後約剩 ${Math.max(0, q.limit - q.used - (r.members || 0))} 則。` : "")
+      + `今天已手動傳送 ${r.usedToday} 次，最多 ${r.max} 次。`;
     $("btnEdSend").disabled = r.usedToday >= r.max;
     $("edBox").classList.remove("hidden");
   } catch (e) { showMsg($("edMsg"), e.message, "err"); }
@@ -1333,5 +1359,6 @@ $("btnEdSend").onclick = async () => {
     $("edBox").classList.add("hidden");
     $("edLog").textContent = edLogText(r.log);
     showMsg($("edMsg"), `已傳送到公司群組（今天第 ${r.usedToday} 次）`, "ok");
+    loadQuota();
   } catch (e) { showMsg($("edMsg"), e.message, "err"); $("btnEdSend").disabled = false; }
 };

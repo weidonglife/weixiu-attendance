@@ -175,6 +175,17 @@ tr.hl td { background: #fdf1e3; }
 .banner { background: #fff4e5; border: 1px solid #f0c27a; color: #8a4b0f; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-weight: 600; cursor: pointer; }
 .banner:hover { background: #ffecd2; }
 .banner a { color: inherit; }
+/* LINE 本月訊息額度 */
+.lq-bar { background: #fff; border: 1px solid #dfe7ef; border-radius: 10px; padding: 9px 14px; margin-bottom: 12px; font-size: 14px; color: #34465a; }
+.lq-bar .lq-top { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.lq-bar .lq-meter { height: 6px; background: #e8eef4; border-radius: 3px; margin-top: 6px; overflow: hidden; }
+.lq-bar .lq-meter i { display: block; height: 100%; background: #4f9a1f; border-radius: 3px; }
+.lq-bar.warn .lq-meter i { background: #e0a020; }
+.lq-bar.bad { background: #fff4f2; border-color: #f0b8ae; }
+.lq-bar.bad .lq-meter i { background: #d0442c; }
+.lq-bar .lq-note { margin-top: 6px; color: #9a3412; }
+.lq-bar .lq-log { margin-top: 6px; color: #6b7a8c; }
+.lq-bar .lq-log summary { cursor: pointer; }
 /* 員工編號放在名字左邊（管理後台表格） */
 .empno { display: inline-block; min-width: 3.4em; margin-right: 6px; color: var(--muted); font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
 a.btnlink { display: inline-block; background: #06c755; color: #fff; text-decoration: none; padding: 10px 16px; border-radius: 8px; font-size: 16px; }
