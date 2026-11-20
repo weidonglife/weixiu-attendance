@@ -192,7 +192,7 @@ async function loadDay() {
       const list = (byEmp[s.empId] || []).sort((a, b) => a.ts - b.ts);
       const wins = leaveByEmp[s.empId] || [];
       const leaveTxt = wins.length ? `<br><span class="muted">${wins.map(w => `${esc(LEAVE_LABEL[w.type] || w.type)} ${w.hours}h`).join("、")}</span>` : "";
-      const nameCell = `<td class="c-name"><span class="empno">${esc(s.empId)}</span>${esc(s.name)}${isPart(s) ? ' <span class="tag gray">兼職</span>' : ""}</td><td class="c-co">${esc(s.company)}</td>`;
+      const nameCell = `<td class="c-co">${esc(s.company)}</td><td class="c-name"><span class="empno">${esc(s.empId)}</span>${esc(s.name)}${isPart(s) ? ' <span class="tag gray">兼職</span>' : ""}</td>`;
       if (!list.length) {
         let tags;
         if (isPart(s) && shiftOf[s.empId]) {

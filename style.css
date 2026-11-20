@@ -323,11 +323,11 @@ header.top .who:empty + .lang-btn { margin-left: auto; }
   /* 每日出勤：每位員工一張小卡 */
   .day-tbl thead { display: none; }
   .day-tbl, .day-tbl tbody { display: block; }
-  .day-tbl tr { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "name st" "co st" "in out" "dt dt"; column-gap: 10px; row-gap: 2px; padding: 12px 2px; border-bottom: 1px solid #e3e9f0; }
+  .day-tbl tr { display: grid; grid-template-columns: auto 1fr 1fr auto; grid-template-areas: "co name name st" "in in out out" "dt dt dt dt"; align-items: center; column-gap: 10px; row-gap: 2px; padding: 12px 2px; border-bottom: 1px solid #e3e9f0; }
   .day-tbl td { display: block; border: 0; padding: 0; }
   .day-tbl td[colspan] { grid-column: 1 / -1; }
   .day-tbl .c-name { grid-area: name; font-weight: 600; font-size: 16px; }
-  .day-tbl .c-co { grid-area: co; font-size: 12px; color: var(--muted, #6b7a8c); }
+  .day-tbl .c-co { grid-area: co; font-size: 12px; color: var(--muted, #6b7a8c); background: #eef3f8; border-radius: 6px; padding: 2px 7px; white-space: nowrap; }
   .day-tbl .c-st { grid-area: st; justify-self: end; text-align: right; }
   .day-tbl .c-in { grid-area: in; margin-top: 6px; font-variant-numeric: tabular-nums; }
   .day-tbl .c-out { grid-area: out; margin-top: 6px; font-variant-numeric: tabular-nums; }
